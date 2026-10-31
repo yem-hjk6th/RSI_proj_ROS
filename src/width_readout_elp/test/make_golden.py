@@ -5,6 +5,16 @@ Run from the repository root (needs numpy, scipy, pandas, OpenCV):
 
 Writes test/fixtures/golden_legacy_e1.csv: one line per (frame, d bin) the legacy readout returned, with every row
 column at full precision, plus one line per frame the legacy gate rejected (empty row columns, the skip reason).
+
+The fixture depends on the JPEG decoder. A different OpenCV / libjpeg build decodes the q95 frames to slightly
+different pixels: the rows, gates and NaN pattern stay the same, but widths move by up to about 0.007 mm, far more
+than the 1e-6 mm tolerance. Regenerate it only in the CI environment. The committed fixture was made with:
+    image    ros:jazzy-ros-base@sha256:8eed0a4669bbf43ee331878a4c39bd8ebddea8e3312a58b4fae8edb14526b617
+    packages (installed by rosdep from package.xml) python3-opencv 4.6.0+dfsg-13.1ubuntu1 (cv2.__version__ 4.6.0),
+             libjpeg-turbo8 2.1.5-2ubuntu2, numpy 1.26.4, scipy 1.11.4, pandas 2.1.4
+    sha256   e1edaa7d24b0df3eede274d991883f25dc83ce4899d54cdcbe3df41037b4168b
+In that container, after `rosdep install --from-paths src --ignore-src -y`, run the command above.
+test_legacy_live.py runs the same comparison without the fixture, so it does not depend on the decoder.
 """
 import csv
 import sys
