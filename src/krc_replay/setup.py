@@ -23,6 +23,7 @@ setup(
     entry_points={
         "console_scripts": [
             "log_player = krc_replay.log_player:main",
+            "latency_test = krc_replay.latency_test:main",
         ],
     },
 )

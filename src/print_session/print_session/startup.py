@@ -25,6 +25,12 @@ MODES = ("shadow", "closed", "step")
 VERSION = "v3 print_session (ROS 2 port of realtime_cl_261023)"
 V_CAL_MM_S = 12.0           # run_cl.V_CAL_MM_S: the calibration speed of the reachability print
 
+# Shadow mode on the RSI_OV4 configuration (legacy/README.md, run_cl.py lines 4 and 7): the reply carries no <OvCmd>,
+# RSI reads the missing input as 0 and LIMIT1 (1..100) raises it to 1, so the program runs at 1 % override.
+SHADOW_WARNING = ("SHADOW MODE: the replies carry no OvCmd. On a KRC program that uses RSI_OV4 "
+                  "(RSI_CREATE(\"RSI_OV4.rsi\")) the OvCmd input is then 0, LIMIT1 (1..100) raises it to 1, and the "
+                  "robot runs at 1 % override. Run shadow mode with a print program on RSI_MIN.")
+
 # node names = the top-level keys of the parameter file
 BRIDGE, CONTROLLER, READOUT, SESSION = "krc_rsi_bridge", "cl_controller", "width_readout_elp", "print_session"
 
@@ -151,7 +157,7 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
     pat = load_pattern(pj, cl["root"] or None)
     cfg, law_cfg, plateaus = build_configs(cl, pat)
     sess = {**SESSION_PARAMS, **params.get(SESSION, {})}
-    log: List[str] = []
+    log: List[str] = [SHADOW_WARNING] if mode == "shadow" else []
 
     # ---- run_cl.main refusals that no node does
     if mode != "step" and not image_topic:

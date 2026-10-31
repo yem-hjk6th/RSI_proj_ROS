@@ -13,6 +13,7 @@ invariants over a whole recorded session.
 | `recording_sim.py` | no | `krc_sim`'s `KrcSim` with a per-reply record (IPOC, OvCmd, RKorr). Motion, timing and Timeout logic are unchanged. |
 | `report.py` | no | Chain checks and the agreement report; linear-ramp check. |
 | `log_player.py` | yes | `log_player` node: `lockstep` or `realtime` mode. |
+| `latency_test.py` | no | `latency_test` CLI: `krc_sim` against a bridge on another host, and its report (`report.link_report`). |
 
 ### log_player
 
@@ -35,6 +36,26 @@ ros2 launch krc_replay replay_realtime.launch.py params_file:=config/e1.yaml \
 Paths are relative to the repository root, or absolute. `n_packets:=0` replays to the end of the session.
 The real-time launch uses `krc_sim`'s own `sim_node` in replay mode on loopback UDP. It ends when the simulator ends.
 
+## Latency test (T9)
+
+`krc_sim` (pattern mode, its own process) against a `krc_rsi_bridge` on another host, for a given time. The bridge
+side runs the bridge alone, in closed mode, with the session parameter file:
+
+```bash
+ros2 launch krc_replay latency_bridge.launch.py params_file:=config/e1.yaml
+```
+
+The simulator side:
+
+```bash
+ros2 run krc_replay latency_test --host <BRIDGE_IP> --port 59152 --duration 60 --params-file config/e1.yaml
+```
+
+It prints packets sent, late replies and their longest run, Timeout yes / no, the round trip of the on-time replies
+(p50 / p99 / max), replies with nonzero RKorr, OvCmd outside the window (and replies without OvCmd), and PASS / FAIL.
+Exit code 0 = PASS, 1 = FAIL, 2 = the bridge did not answer within `--wait` s. The setup on the lab laptop (WSL 2,
+firewall) and the expected readings are in `docs/deploy_wsl.md` §4.
+
 ## Tests
 
 | File | Test (T5) | ROS |
@@ -42,6 +63,7 @@ The real-time launch uses `krc_sim`'s own `sim_node` in replay mode on loopback 
 | `test_session.py` | core: row encoding, lock-step schedule, node-layer conversion without ROS, slice choice | no |
 | `test_lockstep_ros.py` | 1: lock-step equivalence, 1719 updates, `value_pct` and `source` equal the legacy fixture | yes |
 | `test_elp_node_ros.py` | 2: `width_readout_elp` node on the 40 frames equals the golden rows | yes |
+| `test_latency.py` | T9: the latency report; the CLI against the bridge's reply process (no ROS); the two commands above on loopback for 15 s, report printed | partly |
 | `test_realtime_chain.py` | 3: real-time chain on a 59 s slice; 4: whole session (`KRC_REPLAY_FULL=1`, manual workflow `replay-full`); 5: heartbeat loss | yes |
 
 **Slice (test 3).** `rsi_data` rows 3000–17750: 12.0 s to 71.0 s after the first packet, 59 s. It contains:

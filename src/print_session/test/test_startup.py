@@ -132,3 +132,14 @@ def test_no_bore1_warning_and_e1_with_bore1():
     q = _plan("closed", print_session__bore1_readout=True)
     assert q.realtime["law"]["plan"] == "A_b1" and not any("model only" in line for line in q.log)
     assert asdict(q)["session"]["bore1_readout"] is True
+
+
+def test_shadow_mode_warns_about_rsi_ov4():
+    """T9: shadow mode warns at start-up that the reply has no OvCmd, which is 1 % override on RSI_OV4."""
+    from print_session.startup import SHADOW_WARNING
+    p = _plan("shadow", cl_controller__plan="A")
+    assert p.log[0] == SHADOW_WARNING
+    for needle in ("no OvCmd", "RSI_OV4", "1 % override", "RSI_MIN"):
+        assert needle in SHADOW_WARNING
+    for mode in ("closed", "step"):
+        assert SHADOW_WARNING not in _plan(mode, cl_controller__plan="A").log

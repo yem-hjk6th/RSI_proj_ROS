@@ -2,6 +2,7 @@
 
 3. Shadow mode against krc_sim on loopback for about 10 s: the replies carry no OvCmd, a bag is recorded,
    session_meta.json is written, and bag_to_legacy runs on the bag.
+   It also logs the shadow-mode warning (T9: no OvCmd in the reply, 1 % override on RSI_OV4).
 4. Without mode the launch refuses to start (and with a mode outside shadow | closed | step, and when a start-up
    check refuses); no session is created then.
 """
@@ -118,6 +119,11 @@ def test_shadow_bringup_against_krc_sim(tmp_path):
     out = _finish(proc, 60)                            # the session ends by itself once RSI is gone
     print(out[-3000:])
     assert proc.returncode == 0, out[-4000:]
+
+    # T9: the shadow-mode warning, from the launch and as a WARN line of the session node
+    from print_session.startup import SHADOW_WARNING
+    assert out.count(SHADOW_WARNING) >= 2, out[:4000]
+    assert any("WARN" in line and SHADOW_WARNING in line for line in out.splitlines()), out[:4000]
 
     # the replies carry no OvCmd (shadow), and the bridge kept up
     assert st.sent >= 2400 and not st.timeout_stopped
