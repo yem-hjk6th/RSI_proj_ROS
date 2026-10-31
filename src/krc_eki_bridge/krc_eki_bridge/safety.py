@@ -8,7 +8,13 @@ Pure Python, no ROS. Same rules as the RSI bridge (legacy ``rsi_proc.py``, 26102
 - when the heartbeat goes stale, the output ramps linearly from the last value sent under control to
   ``ov_default`` over ``fallback_ramp_s`` (source ``watchdog``); ``fallback_ramp_s = 0`` jumps at once;
 - with no command ever received, ``ov_default`` goes out (source ``default``), no ramp;
-- a fresh heartbeat ends the ramp immediately (control again).
+- a fresh heartbeat ends the ramp immediately (control again);
+- forced open loop: the first command with ``source == "forced"`` sets a latch that is never cleared (only a
+  restart, i.e. a new supervisor, clears it). From the next ``output`` call on, the output ramps linearly from the
+  last value sent under control to ``ov_default`` over ``fallback_ramp_s``, then holds (source ``forced``). Later
+  commands and heartbeats do not interrupt the ramp. A watchdog ramp that is already running when the latch is set
+  simply continues. With nothing sent under control yet, or ``fallback_ramp_s = 0``, it jumps to ``ov_default``.
+  This is the rule of ``krc_rsi_bridge.decider.OverrideDecider`` inside the print window.
 
 All times are seconds on one monotonic clock chosen by the caller.
 """
@@ -70,15 +76,28 @@ class OverrideSupervisor:
         self._seq: Optional[int] = None
         self._hb: Optional[float] = None       # time of the last heartbeat
         self._last_ctrl_out: Optional[int] = None  # last value sent under control (ramp start)
-        self._ramp: Optional[Tuple[float, int]] = None  # (t0, ov_from) of the running ramp
+        self._ramp: Optional[Tuple[float, int]] = None  # (t0, ov_from) of the running watchdog / forced ramp
+        self._forced = False                    # latch: set once, never cleared
 
-    def on_command(self, value_pct: float, seq: int, t: float) -> None:
-        """Store a command. Only a changed ``seq`` refreshes the heartbeat."""
+    @property
+    def forced(self) -> bool:
+        """True once a ``forced`` command has been received. Never goes back to False."""
+        return self._forced
+
+    def on_command(self, value_pct: float, seq: int, t: float, source: str = "") -> bool:
+        """Store a command. Only a changed ``seq`` refreshes the heartbeat.
+
+        ``source == "forced"`` sets the forced latch. Returns True only for the command that set it.
+        """
+        latched_now = source == "forced" and not self._forced
+        if latched_now:
+            self._forced = True
         self._ov_ctrl = clamp_override(value_pct, self.cfg)
         seq = int(seq)
         if self._seq is None or seq != self._seq:
             self._seq = seq
             self._hb = float(t)
+        return latched_now
 
     def heartbeat_fresh(self, t: float) -> bool:
         return self._hb is not None and (t - self._hb) <= self.cfg.wd_s
@@ -86,6 +105,8 @@ class OverrideSupervisor:
     def output(self, t: float) -> Tuple[int, str]:
         """Return ``(override_pct, source)`` for time ``t``. The value is always clamped."""
         cfg = self.cfg
+        if self._forced:
+            return self._forced_output(t)
         if self._ov_ctrl is not None and self.heartbeat_fresh(t):
             self._ramp = None
             ov = clamp_override(self._ov_ctrl, cfg)
@@ -103,3 +124,14 @@ class OverrideSupervisor:
         t0, ov_from = self._ramp
         f = min(1.0, max(0.0, (t - t0) / cfg.fallback_ramp_s))
         return clamp_override(ov_from + f * (cfg.ov_default - ov_from), cfg), "watchdog"
+
+    def _forced_output(self, t: float) -> Tuple[int, str]:
+        cfg = self.cfg
+        if cfg.fallback_ramp_s <= 0.0 or (self._ramp is None and self._last_ctrl_out is None):
+            return clamp_override(cfg.ov_default, cfg), "forced"
+        if self._ramp is None:
+            # starts at the first output after the latch, from the last value sent under control
+            self._ramp = (float(t), self._last_ctrl_out)
+        t0, ov_from = self._ramp
+        f = min(1.0, max(0.0, (t - t0) / cfg.fallback_ramp_s))
+        return clamp_override(ov_from + f * (cfg.ov_default - ov_from), cfg), "forced"

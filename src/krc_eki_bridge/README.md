@@ -8,8 +8,25 @@ An EthernetKRL bridge for a KR C4 without RSI (route C in `docs/DESIGN.md`). It 
 - Applies the same safety rules as the RSI bridge (`krc_eki_bridge/safety.py`):
   - clamp to `[max(ov_min, ov_floor), ov_max]`;
   - heartbeat watchdog (`wd_s`);
-  - linear ramp to `ov_default` over `fallback_ramp_s`.
+  - linear ramp to `ov_default` over `fallback_ramp_s`;
+  - forced latch (below).
 - Never sends motion targets.
+
+## Forced latch
+
+`cl_controller` sends `source: forced` when its speed check latches. The EKI bridge then behaves like
+`krc_rsi_bridge` inside the print window (`OverrideSupervisor`, source `forced`):
+
+- The first `OverrideCmd` with `source == "forced"` sets a latch. Only a restart of the bridge clears it.
+- From the next send on, the override ramps linearly from the last value sent under control to `ov_default` over
+  `fallback_ramp_s`, then holds there.
+  - If a heartbeat ramp is already running, it simply continues.
+  - With nothing sent under control yet, or `fallback_ramp_s: 0`, it jumps to `ov_default`.
+- Later commands and heartbeats change nothing: no new control value, no restart of the ramp, no end of the latch.
+- The clamp to `[max(ov_min, ov_floor), ov_max]` still applies to every value.
+- The node logs one warning when the latch is set.
+
+`test/test_same_as_rsi.py` feeds one timeline to both bridges and checks that they send the same override.
 
 ## Layout
 
@@ -64,7 +81,8 @@ python3 -m pytest src/krc_eki_bridge/test
 ```
 
 These are pure-Python tests against the fake EKI server. They cover state parsing, the override send, the
-heartbeat ramp and the clamp, plus the template checks.
+heartbeat ramp, the clamp and the forced latch, plus the template checks. `test_same_as_rsi.py` also imports
+`krc_rsi_bridge` (from `src/` or the install space).
 
 The controller templates in `krc_templates/` are **NOT RUN**. See `krc_templates/README.md` for the sources and the
 rules that are still unverified.
