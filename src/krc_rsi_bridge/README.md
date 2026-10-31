@@ -14,13 +14,15 @@ RSI UDP server for the KR C4 (route A in `docs/DESIGN.md`). Ported from `legacy/
 | `shared.py` | Lock-free shared values and the packet ring (reply loop → ROS) | no |
 | `server.py` | The reply loop in its own process (`spawn`), and its parent-side handle | no |
 | `path_speed.py` | Chord path speed and `v_eff` for `KrcState` | no |
-| `bridge_node.py` | Thin ROS 2 node: `/krc/state` out, `/krc/override_cmd` in | yes |
+| `bridge_node.py` | Thin ROS 2 node: `/krc/state` and `/krc/reply_record` out, `/krc/override_cmd` in | yes |
+| `records.py` | Ring slot → `ReplyRecord` fields | no |
 
 The reply loop does only this per packet: receive, parse, decide, reply. Then it writes the packet into a shared-memory ring. It takes no locks, does no logging and never waits on the parent. The ROS side writes the controller's value and heartbeat into shared scalars and reads the ring on a timer.
 
 ## Topics
 
 - `/krc/state` (`krc_interfaces/KrcState`): one message per RSI packet. `stamp` is the kernel receive time of the packet. `late_replies` counts replies sent more than `deadline_s` after the packet arrived.
+- `/krc/reply_record` (`krc_interfaces/ReplyRecord`): one per packet, same `stamp` as its `KrcState`. The OvCmd decided for the packet and its source (the legacy `ov_cmd_<ses>.csv` row), whether the reply carried it (`false` in shadow mode), the packet's `Delay` and the reply latency. Filled from the packet ring by `records.py`, like `KrcState`; the reply loop is unchanged.
 - `/krc/override_cmd` (`krc_interfaces/OverrideCmd`):
   - A message whose `seq` differs from the previous one is a heartbeat and a new value.
   - `source: default` is the controller default. Any other source counts as control.

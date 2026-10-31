@@ -1,5 +1,6 @@
 """Node smoke test (runs where rclpy and krc_interfaces are installed, e.g. in CI): the node starts with config/e1.yaml,
-declares every parameter, publishes OverrideCmd while KrcState is fresh and stops when it goes stale."""
+declares every parameter, publishes OverrideCmd while KrcState is fresh (and a CtrlRecord per update) and stops when
+it goes stale."""
 import time
 
 import pytest
@@ -16,7 +17,7 @@ def test_node_runs_e1_params():
 
     from cl_controller.node import ControllerNode
     from cl_controller.params import NODE_PARAMS, PARAMS
-    from krc_interfaces.msg import KrcState, OverrideCmd
+    from krc_interfaces.msg import CtrlRecord, KrcState, OverrideCmd
 
     rclpy.init()
     try:
@@ -28,6 +29,8 @@ def test_node_runs_e1_params():
         helper = rclpy.create_node("cl_controller_test")
         got = []
         helper.create_subscription(OverrideCmd, "/krc/override_cmd", got.append, 10)
+        recs = []
+        helper.create_subscription(CtrlRecord, "/controller/ctrl_record", recs.append, 50)
         pub = helper.create_publisher(KrcState, "/krc/state", 10)
         ex = SingleThreadedExecutor()
         ex.add_node(node)
@@ -49,6 +52,10 @@ def test_node_runs_e1_params():
         seqs = [g.seq for g in got]
         assert seqs == sorted(seqs) and len(set(seqs)) == len(seqs)
         assert {g.source for g in got} <= {"elp", "bore1", "model", "forced", "default"}
+        assert len(recs) >= 3, "no CtrlRecord after the updates"
+        assert [r.n_upd for r in recs] == list(range(recs[0].n_upd, recs[0].n_upd + len(recs)))
+        assert all(r.plan == "A_b1" and r.win in ("before", "inside") for r in recs)
+        assert all(r.t_perf > 0 and r.stamp.sec > 0 for r in recs)
         n = len(got)
         t_end = time.monotonic() + 1.0                  # no more KrcState: heartbeat stale -> no publish
         while time.monotonic() < t_end:

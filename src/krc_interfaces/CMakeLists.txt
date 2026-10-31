@@ -7,7 +7,9 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/KrcState.msg"
+  "msg/CtrlRecord.msg"
   "msg/OverrideCmd.msg"
+  "msg/ReplyRecord.msg"
   "msg/Width.msg"
   DEPENDENCIES builtin_interfaces
 )
