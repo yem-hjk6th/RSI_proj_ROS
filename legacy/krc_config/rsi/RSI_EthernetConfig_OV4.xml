@@ -1,0 +1,34 @@
+<ROOT>
+   <!-- Copy of RSI_EthernetConfig.xml with one new RECEIVE element, OvCmd (INDX 7). The SEND block, the CONFIG
+        block and the six RKorr elements are unchanged.
+        OvCmd -> ETHERNET1 Out7 -> LIMIT1 (1..100) -> MAP2OV_PRO1 -> $OV_PRO (no src logic, no $SEN_PREA).
+        Installed next to the original in the controller's SensorInterface config folder (new name). -->
+   <CONFIG>
+      <IP_NUMBER><PC_IP></IP_NUMBER>
+      <PORT>59152</PORT>
+      <SENTYPE>ImFree</SENTYPE>
+      <ONLYSEND>FALSE</ONLYSEND>
+   </CONFIG>
+<SEND>
+      <ELEMENTS>
+         <ELEMENT TAG="DEF_RIst" TYPE="DOUBLE" INDX="INTERNAL" />
+         <ELEMENT TAG="DEF_RSol" TYPE="DOUBLE" INDX="INTERNAL" />
+         <ELEMENT TAG="DEF_Delay" TYPE="LONG" INDX="INTERNAL" />
+         <ELEMENT TAG="Override" TYPE="LONG" INDX="1" />
+         <ELEMENT TAG="Vel_Act" TYPE="LONG" INDX="2" />
+         <ELEMENT TAG="RPM_Ext" TYPE="LONG" INDX="3" />
+      </ELEMENTS>
+   </SEND>
+<RECEIVE>
+      <ELEMENTS>
+         <ELEMENT TAG="RKorr.X" TYPE="DOUBLE" INDX="1" HOLDON="1" />
+         <ELEMENT TAG="RKorr.Y" TYPE="DOUBLE" INDX="2" HOLDON="1" />
+         <ELEMENT TAG="RKorr.Z" TYPE="DOUBLE" INDX="3" HOLDON="1" />
+         <ELEMENT TAG="RKorr.A" TYPE="DOUBLE" INDX="4" HOLDON="1" />
+         <ELEMENT TAG="RKorr.B" TYPE="DOUBLE" INDX="5" HOLDON="1" />
+         <ELEMENT TAG="RKorr.C" TYPE="DOUBLE" INDX="6" HOLDON="1" />
+         <!-- NEW: program override command in percent, integer-valued (e.g. 75.0). HOLDON=1: a late packet keeps the last valid value -->
+         <ELEMENT TAG="OvCmd" TYPE="DOUBLE" INDX="7" HOLDON="1" />
+      </ELEMENTS>
+   </RECEIVE>
+</ROOT>
