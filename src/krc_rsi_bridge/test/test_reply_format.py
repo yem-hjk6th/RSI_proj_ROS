@@ -8,6 +8,8 @@ import csv
 import gzip
 import importlib.util
 import io
+import sys
+import types
 
 import pytest
 from bridge_paths import FIXTURES, LEGACY, PATTERN
@@ -71,6 +73,48 @@ def test_reply_builder_equals_legacy_function():
     for ipoc in ("0", "1481588", "1909172", "18446744073709551615"):
         for ov in (-5, 0, 1, 12, 40, 99, 100, 150):
             assert build_ov_reply(ipoc, ov) == mod.build_ov_reply(ipoc, ov)
+
+
+LISTENER = LEGACY.parent / "pipeline_cage1012" / "rsi_listener.py"
+
+
+def legacy_listener():
+    spec = importlib.util.spec_from_file_location("legacy_rsi_listener", LISTENER)
+    mod = importlib.util.module_from_spec(spec)
+    saved = sys.modules.get("config")
+    sys.modules["config"] = types.ModuleType("config")   # the pipeline's config.py is not in legacy/; only RsiListener reads it
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        if saved is None:
+            sys.modules.pop("config", None)
+        else:
+            sys.modules["config"] = saved
+    return mod
+
+
+@pytest.mark.skipif(not LISTENER.exists(), reason="legacy/ not available")
+def test_zero_reply_equals_legacy_function():
+    """Shadow mode: the zero reply is byte-identical to the legacy rsi_listener.build_zero_reply."""
+    mod = legacy_listener()
+    for ipoc in ("0", "1481588", "1909172", "18446744073709551615"):
+        assert build_zero_reply(ipoc) == mod.build_zero_reply(ipoc)
+
+
+@pytest.mark.skipif(not LISTENER.exists(), reason="legacy/ not available")
+def test_parse_packet_equals_legacy_parser():
+    """Same fields as the legacy parser, except Delay: the packet carries it as the D attribute (<Delay D="3" />),
+    which the port reads; the legacy parser reads the element text, so it logged 0 for every packet (E1: all
+    106 897 rows of rsi_data have delay 0)."""
+    mod = legacy_listener()
+    for r in golden_rows()[::97]:
+        f = float
+        rist = [f(r[k]) for k in ("rist_x_mm", "rist_y_mm", "rist_z_mm", "rist_a_deg", "rist_b_deg", "rist_c_deg")]
+        b = build_packet(int(r["ipoc"]), rist, rist, 3, int(r["override"]), int(r["vel_act"]), int(r["rpm_ext"]))
+        p, q = parse_packet(b), mod.parse_rsi_xml(b, 0.0, 0.0)
+        assert (p.ipoc, p.rist, p.rsol, p.override, p.vel_act, p.rpm_ext) == \
+               (q.ipoc, q.rist, q.rsol, q.override, q.vel_act, q.rpm_ext)
+        assert (p.delay, q.delay) == (3, 0)
 
 
 def test_rkorr_is_always_zero():
