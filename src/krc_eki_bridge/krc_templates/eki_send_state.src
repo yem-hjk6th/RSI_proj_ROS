@@ -1,0 +1,46 @@
+&ACCESS RVO
+&REL 1
+&COMMENT NOT RUN - krc_eki_bridge state sender (template)
+; NOT RUN - template, never tested on a controller.
+; Sends one <State> message on the EKI channel "KrcEki" (krc_templates/KrcEki.xml). Called from the sps.sub snippet
+; (sps_eki_override.sub) once per submit cycle while the connection is up. Read-only: it reads system variables and
+; sends them; it never commands motion. Every KUKA rule it relies on is listed in krc_templates/README.md.
+;
+;   State/Pos   $POS_ACT X, Y, Z [mm], A, B, C [deg]
+;   State/Ov    $OV_PRO [%]
+;   State/Vel   $VEL_ACT [m/s] x 1000 -> mm/s ($VEL_ACT unit unverified)
+;   State/Rpm   EffectiveRPM_mon (extruder rpm command, global from legacy sps.sub)
+;   State/T     $ROB_TIMER [ms] (unverified), the bridge uses it as ipoc and as its speed clock
+;   State/Mode  1 T1, 2 T2, 3 AUT, 4 EXT, 0 other
+
+GLOBAL DEF EkiSendState()
+   DECL EKI_STATUS Ret
+   DECL INT ModeCode
+   
+   SWITCH $MODE_OP
+   CASE #T1
+      ModeCode = 1
+   CASE #T2
+      ModeCode = 2
+   CASE #AUT
+      ModeCode = 3
+   CASE #EX
+      ModeCode = 4
+   DEFAULT
+      ModeCode = 0
+   ENDSWITCH
+   
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@X", $POS_ACT.X)
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@Y", $POS_ACT.Y)
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@Z", $POS_ACT.Z)
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@A", $POS_ACT.A)
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@B", $POS_ACT.B)
+   Ret = EKI_SetReal("KrcEki", "State/Pos/@C", $POS_ACT.C)
+   Ret = EKI_SetInt("KrcEki", "State/Ov", $OV_PRO)
+   Ret = EKI_SetReal("KrcEki", "State/Vel", $VEL_ACT * 1000.0)
+   Ret = EKI_SetReal("KrcEki", "State/Rpm", EffectiveRPM_mon)
+   Ret = EKI_SetInt("KrcEki", "State/T", $ROB_TIMER)
+   Ret = EKI_SetInt("KrcEki", "State/Mode", ModeCode)
+   ; send the whole <State> subtree as one message (unverified: EKI_Send with a tag path sends that subtree)
+   Ret = EKI_Send("KrcEki", "State")
+END

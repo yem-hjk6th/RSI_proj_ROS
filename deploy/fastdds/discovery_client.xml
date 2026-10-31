@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fast DDS profile for the client (LAN or Wi-Fi): a SUPER_CLIENT of the Discovery Server on the edge PC, so the
+  ros2 CLI and rqt see every topic. Replace <EDGE_IP> with the edge PC's address before use.
+  Use with:  FASTRTPS_DEFAULT_PROFILES_FILE=/ws/deploy/fastdds/discovery_client.xml
+  Equivalent without XML: ROS_DISCOVERY_SERVER=<EDGE_IP>:11811 and ROS_SUPER_CLIENT=true
+-->
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <participant profile_name="wifi_super_client" is_default_profile="true">
+      <rtps>
+        <builtin>
+          <discovery_config>
+            <discoveryProtocol>SUPER_CLIENT</discoveryProtocol>
+            <discoveryServersList>
+              <RemoteServer prefix="44.53.00.5f.45.50.52.4f.53.49.4d.41">
+                <metatrafficUnicastLocatorList>
+                  <locator>
+                    <udpv4>
+                      <address><EDGE_IP></address>
+                      <port>11811</port>
+                    </udpv4>
+                  </locator>
+                </metatrafficUnicastLocatorList>
+              </RemoteServer>
+            </discoveryServersList>
+          </discovery_config>
+        </builtin>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>
