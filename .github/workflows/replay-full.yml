@@ -1,0 +1,42 @@
+name: replay-full
+
+# T5 acceptance test 4: the real-time chain over the whole of session E1 (106 897 packets, about 430 s).
+# Manual only; the per-push CI (ci.yml) runs the 59 s slice.
+on:
+  workflow_dispatch:
+
+jobs:
+  full-session:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y python3-colcon-common-extensions python3-pytest python3-pandas
+          rosdep update
+          rosdep install --from-paths src --ignore-src -y
+      - name: Build
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --event-handlers console_cohesion+
+      - name: Full-session replay
+        env:
+          KRC_REPLAY_FULL: "1"
+          KRC_REPLAY_REPORT_DIR: ${{ github.workspace }}/replay_report
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          python3 -m pytest -p no:cacheprovider -s src/krc_replay/test/test_realtime_chain.py -k full_session
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-full-report
+          path: replay_report/
+          if-no-files-found: warn

@@ -55,6 +55,8 @@ PARAMS: Dict[str, Tuple[object, str]] = {
 # Node-only parameters (not in run_cl.py).
 NODE_PARAMS: Dict[str, Tuple[object, str]] = {
     "step_period_s": (0.05, "controller step period, s (legacy ControllerThread period)"),
+    "lockstep": (False, "test hook: no timer; one law update per message on /cl_controller/step, time from the "
+                        "messages (default false = the timer-driven node)"),
 }
 
 NOT_HERE = {
