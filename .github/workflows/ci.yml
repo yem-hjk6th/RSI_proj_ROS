@@ -29,3 +29,16 @@ jobs:
           source install/setup.bash
           colcon test --event-handlers console_cohesion+
           colcon test-result --verbose
+
+  docker-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the deploy image (build only)
+        run: docker build -f deploy/Dockerfile -t rsi-proj-ros:ci .
+      - name: Smoke-check the image
+        run: |
+          docker run --rm rsi-proj-ros:ci ros2 pkg list | grep -x krc_eki_bridge
+          docker run --rm rsi-proj-ros:ci ros2 pkg list | grep -x krc_interfaces
+      - name: Validate compose file
+        run: docker compose -f deploy/compose.yaml config --quiet

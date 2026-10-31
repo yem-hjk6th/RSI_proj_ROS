@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NOT RUN - template, never tested on a controller. Review against the KUKA.EthernetKRL manual of the installed
+  version before use. See krc_templates/README.md for the sources and the list of unverified rules.
+
+  EthernetKRL channel "KrcEki" for krc_eki_bridge. Install it in the controller's EthernetKRL configuration
+  folder under the file name KrcEki.xml (the file name is the channel name, unverified).
+  - The controller is the TCP server; the PC bridge connects to <ROBOT_IP>:<EKI_PORT> as client.
+    <EKI_PORT> is a parameter: it must equal controller_port in the bridge's parameter file (example: 54600).
+  - Receive: <Ext><Ov>NN</Ov><Seq>n</Seq></Ext> (override in %, link sequence number). Nothing else.
+  - Send:    <State> with $POS_ACT, $OV_PRO, $VEL_ACT [mm/s], extruder rpm, timer [ms], mode code.
+  - No motion targets in either direction.
+-->
+<ETHERNETKRL>
+  <CONFIGURATION>
+    <EXTERNAL>
+      <!-- the external system (PC) is the client, so the controller is the server (unverified) -->
+      <TYPE>Client</TYPE>
+    </EXTERNAL>
+    <INTERNAL>
+      <!-- Submit: the channel belongs to the submit interpreter (sps.sub), not to a robot program (unverified) -->
+      <ENVIRONMENT>Submit</ENVIRONMENT>
+      <!-- keep at most 4 messages; the sps snippet reads them all each cycle and uses the newest (unverified) -->
+      <BUFFERING Mode="FIFO" Limit="4"/>
+      <BUFFSIZE Limit="4096"/>
+      <!-- $FLAG[EKI_FLAG_ALIVE] is TRUE while the TCP connection is up (unverified); keep the number in sync with
+           EKI_FLAG_ALIVE in sps_eki_override.sub -->
+      <ALIVE Set_Flag="998"/>
+      <IP><ROBOT_IP></IP>
+      <PORT><EKI_PORT></PORT>
+      <PROTOCOL>TCP</PROTOCOL>
+      <MESSAGES Logging="error" Display="disabled"/>
+    </INTERNAL>
+  </CONFIGURATION>
+  <RECEIVE>
+    <XML>
+      <ELEMENT Tag="Ext/Ov" Type="INT"/>
+      <ELEMENT Tag="Ext/Seq" Type="INT"/>
+    </XML>
+  </RECEIVE>
+  <SEND>
+    <XML>
+      <ELEMENT Tag="State/Pos/@X"/>
+      <ELEMENT Tag="State/Pos/@Y"/>
+      <ELEMENT Tag="State/Pos/@Z"/>
+      <ELEMENT Tag="State/Pos/@A"/>
+      <ELEMENT Tag="State/Pos/@B"/>
+      <ELEMENT Tag="State/Pos/@C"/>
+      <ELEMENT Tag="State/Ov"/>
+      <ELEMENT Tag="State/Vel"/>
+      <ELEMENT Tag="State/Rpm"/>
+      <ELEMENT Tag="State/T"/>
+      <ELEMENT Tag="State/Mode"/>
+    </XML>
+  </SEND>
+</ETHERNETKRL>

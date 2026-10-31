@@ -1,0 +1,19 @@
+# Example parameters for krc_eki_bridge. Replace the placeholders before use.
+krc_eki_bridge:
+  ros__parameters:
+    controller_host: "<CONTROLLER_IP>"   # KR C4 KLI address (EKI server)
+    controller_port: 54600               # must match <PORT> in krc_templates/KrcEki.xml
+    send_period_s: 0.05                  # override message period
+    publish_period_s: 0.01               # how often queued states are published
+    connect_timeout_s: 1.0
+    reconnect_s: 1.0
+    # safety (same meaning as in krc_rsi_bridge)
+    ov_min: 1
+    ov_max: 100
+    ov_floor: 0              # speed floor; effective lower limit = max(ov_min, ov_floor)
+    ov_default: 50
+    wd_s: 1.0                # heartbeat (OverrideCmd.seq) timeout
+    fallback_ramp_s: 2.0     # linear ramp to ov_default after a stale heartbeat
+    # state estimate
+    chord_s: 0.1
+    tau_v: 0.28

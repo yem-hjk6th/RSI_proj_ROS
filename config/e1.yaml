@@ -1,0 +1,46 @@
+# Parameter set of session E1 (data/e1_20261022_165128, 2026-10-22, closed loop, plan A_b1).
+# Recovered from raw_video/session_meta.json ("realtime": cfg, law, speed), roboter/eval_v3_*.json (plan A_b1, order
+# bore1 -> elp, W* 5.25), the ctrl_*.csv.gz header (v3 columns up to lnk_ol: version realtime_cl_261022, so no
+# du_blind / t_blind = blind_tau 0) and the run_cl.py defaults for everything E1 did not override.
+# Derived at start-up from the pattern (not set here): V_max 30 mm/s, ov_base 40.0, ov_default 40,
+# speed floor ceil(3.4 x 100 / 30) = 12, so the window is 12..100.
+#
+# Usage: ros2 run cl_controller controller_node --ros-args --params-file config/e1.yaml
+cl_controller:
+  ros__parameters:
+    mode: closed
+    pattern: pattern_usr_ELP_R1v30_CLp_261022.json   # resolved against the package's patterns/ folder
+    root: ""
+    w12_t: 0.0                 # not given (alias of w_target)
+    w_target: 5.25             # cfg.w12_t
+    alpha_m: 0.72
+    ov_outside: 100
+    ov_min: 1                  # outer limit (speed.ov_min_outer); raised to the floor 12
+    ov_max: 100
+    ov_base: 0.0               # derived: 12 x 100 / 30 = 40.0 (speed.ov_base_given null)
+    v_ref_mm_s: 12.0
+    v_start_mm_s: 12.0
+    open_loop_schedule_mm_s: ""
+    v_min_mm_s: 3.4
+    fallback_ramp_s: 2.0
+    window_ignore_z: false
+    limit_probe: -1
+    plan: A_b1
+    primary: ""
+    target: const
+    force_seg: ""
+    b1_win_mm: 1.5
+    gain: 1.0
+    db: 0.02
+    ack: false
+    u0: 0.0
+    tau_slow: 20.0
+    tau_model: 0.0
+    start_mix: 1.0
+    blind_tau: 0.0
+    blind_ref: prev
+    blind_dir: up
+    guard_bed: true
+    target_schedule: const
+    speed_check: latch
+    step_period_s: 0.05

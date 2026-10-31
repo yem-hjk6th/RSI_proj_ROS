@@ -1,0 +1,112 @@
+; NOT RUN - template, never tested on a controller.
+; EthernetKRL override snippet for sps.sub (style of legacy/krc_config/sps.sub).
+; Paste each FOLD into the matching user section of the controller's sps.sub. Every KUKA rule this relies on is
+; listed in krc_templates/README.md with a source link or marked "unverified".
+;
+; What it does, once per submit cycle:
+;   - reads every buffered <Ext> message without blocking and keeps the newest Ov / Seq;
+;   - a message is new when its Seq differs from the last one; no new message for EKI_LOSS_CYCLES cycles, or no
+;     connection, means the link is lost;
+;   - writes $OV_PRO only when $MODE_OP is #AUT or #EX: the received value clamped to [EKI_OV_MIN, EKI_OV_MAX]
+;     while the link is alive, EKI_OV_SAFE when it is lost; in T1 / T2 it holds the last value (no write);
+;   - after a lost connection it re-opens the channel so the PC can reconnect;
+;   - sends the robot state (see eki_send_state.src).
+; It never moves the robot and never reads motion targets.
+; A Python model of this logic is krc_eki_bridge.fake_eki.SpsOverrideModel (tested in test/test_sps_model.py).
+
+;FOLD USER DECL
+   ; ---- EKI override (krc_eki_bridge), NOT RUN
+   DECL EKI_STATUS EkiRet
+   DECL INT EkiOvRx, EkiSeqRx, EkiSeqLast, EkiStaleCnt, EkiN, EkiReopenCnt
+   DECL BOOL EkiNew, EkiAlive, EkiAlivePrev
+   ; tuning (constants as variables so they can be changed in one place)
+   DECL INT EKI_OV_MIN, EKI_OV_MAX, EKI_OV_SAFE, EKI_LOSS_CYCLES, EKI_FLAG_ALIVE, EKI_REOPEN_CYCLES
+;ENDFOLD (USER DECL)
+
+;FOLD USER INIT
+   ; ---- EKI override (krc_eki_bridge), NOT RUN
+   EKI_OV_MIN        = 1      ; lowest override the PC may command [%]
+   EKI_OV_MAX        = 100    ; highest override the PC may command [%]
+   EKI_OV_SAFE       = 50     ; override on loss of connection [%]; set it to the print's ov_default
+   EKI_LOSS_CYCLES   = 40     ; ~0.5 s at a 12 ms submit cycle (cycle time unverified: measure it on site)
+   EKI_FLAG_ALIVE    = 998    ; must match <ALIVE Set_Flag="..."/> in KrcEki.xml
+   EKI_REOPEN_CYCLES = 80     ; wait between re-open attempts after a loss
+   EkiOvRx      = EKI_OV_SAFE      ; KRL variables must be initialised before they are read
+   EkiSeqRx     = -1
+   EkiSeqLast   = -1
+   EkiStaleCnt  = EKI_LOSS_CYCLES   ; start as "lost" until the first message
+   EkiReopenCnt = 0
+   EkiAlivePrev = FALSE
+   EkiRet = EKI_Init("KrcEki")
+   EkiRet = EKI_Open("KrcEki")      ; server mode: waits for the PC in the background (unverified: must not block)
+;ENDFOLD (USER INIT)
+
+;FOLD USER PLC
+   ;FOLD EKI OVERRIDE (krc_eki_bridge, NOT RUN)
+      EkiAlive = $FLAG[EKI_FLAG_ALIVE]
+      EkiNew = FALSE
+      
+      ; ---- read without blocking: at most 4 messages (the FIFO limit), keep the newest
+      IF EkiAlive THEN
+         FOR EkiN = 1 TO 4
+            EkiRet = EKI_CheckBuffer("KrcEki", "Ext/Seq")
+            IF EkiRet.Buff > 0 THEN
+               EkiRet = EKI_GetInt("KrcEki", "Ext/Ov", EkiOvRx)
+               EkiRet = EKI_GetInt("KrcEki", "Ext/Seq", EkiSeqRx)
+               IF EkiSeqRx <> EkiSeqLast THEN
+                  EkiSeqLast = EkiSeqRx
+                  EkiNew = TRUE
+               ENDIF
+            ENDIF
+         ENDFOR
+      ENDIF
+      
+      ; ---- link watchdog
+      IF EkiNew THEN
+         EkiStaleCnt = 0
+      ELSE
+         IF EkiStaleCnt < EKI_LOSS_CYCLES THEN
+            EkiStaleCnt = EkiStaleCnt + 1
+         ENDIF
+      ENDIF
+      IF NOT EkiAlive THEN
+         EkiStaleCnt = EKI_LOSS_CYCLES
+      ENDIF
+      
+      ; ---- clamp the received value
+      IF EkiOvRx < EKI_OV_MIN THEN
+         EkiOvRx = EKI_OV_MIN
+      ENDIF
+      IF EkiOvRx > EKI_OV_MAX THEN
+         EkiOvRx = EKI_OV_MAX
+      ENDIF
+      
+      ; ---- write $OV_PRO only in AUT / EXT; hold the last value in T1 / T2
+      IF (($MODE_OP == #AUT) OR ($MODE_OP == #EX)) THEN
+         IF EkiStaleCnt < EKI_LOSS_CYCLES THEN
+            $OV_PRO = EkiOvRx
+         ELSE
+            $OV_PRO = EKI_OV_SAFE      ; lost link: safe default
+         ENDIF
+      ENDIF
+      
+      ; ---- re-open after a lost connection so the PC can reconnect (unverified sequence)
+      IF EkiAlivePrev AND (NOT EkiAlive) THEN
+         EkiReopenCnt = EKI_REOPEN_CYCLES
+      ENDIF
+      IF (NOT EkiAlive) AND (EkiReopenCnt > 0) THEN
+         EkiReopenCnt = EkiReopenCnt - 1
+         IF EkiReopenCnt == 0 THEN
+            EkiRet = EKI_Clear("KrcEki")
+            EkiRet = EKI_Init("KrcEki")
+            EkiRet = EKI_Open("KrcEki")
+         ENDIF
+      ENDIF
+      EkiAlivePrev = EkiAlive
+      
+      ; ---- send the robot state (eki_send_state.src)
+      IF EkiAlive THEN
+         EkiSendState()
+      ENDIF
+   ;ENDFOLD (EKI OVERRIDE)
+;ENDFOLD (USER PLC)
