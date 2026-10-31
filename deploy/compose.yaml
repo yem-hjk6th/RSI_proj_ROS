@@ -1,0 +1,45 @@
+# Edge PC + remote client. Run from the repository root:
+#   docker compose -f deploy/compose.yaml up --build edge          (on the edge PC)
+#   EDGE_IP=<EDGE_IP> docker compose -f deploy/compose.yaml run --rm client   (on the client)
+# See docs/DEPLOY.md.
+name: rsi-proj-ros
+
+x-ros-image: &ros-image
+  image: rsi-proj-ros:jazzy
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+
+services:
+  edge:
+    <<: *ros-image
+    # every loop with a deadline closes here: host network (no NAT between the bridge and the KR C4),
+    # real-time scheduling allowed, memory may be locked
+    network_mode: host
+    ipc: host
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      memlock: -1
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      START_DISCOVERY_SERVER: "1"
+      ROS_DISCOVERY_SERVER: 127.0.0.1:11811
+    volumes:
+      - ./params:/ws/params:ro       # site parameter files (not in git); see config/example.yaml of each package
+    command: >
+      ${EDGE_CMD:-ros2 launch krc_eki_bridge eki_bridge.launch.py params_file:=/ws/params/krc_eki_bridge.yaml}
+    restart: unless-stopped
+
+  client:
+    <<: *ros-image
+    # never in the control path: visualisation, parameters, start / stop, bag playback
+    network_mode: host
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_DISCOVERY_SERVER: ${EDGE_IP:-<EDGE_IP>}:11811
+      ROS_SUPER_CLIENT: "true"
+    stdin_open: true
+    tty: true
+    command: ${CLIENT_CMD:-bash}

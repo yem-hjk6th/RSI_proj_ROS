@@ -1,0 +1,6 @@
+# keep the Docker build context small: only the workspace sources and deploy files are needed
+*
+!src/
+!deploy/
+src/**/__pycache__/
+src/**/.pytest_cache/
