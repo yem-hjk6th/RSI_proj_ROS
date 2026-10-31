@@ -73,16 +73,17 @@ class WidthReadoutElp(Node):
         ro = self.readout.read(im, g, t, self.frame_idx)
         m = used_rows(ro.rows, self.d_min)
         if not m.any():
-            self.pub.publish(self._width(stamp, ro.leg, math.nan, math.nan, math.nan, False))
+            self.pub.publish(self._width(stamp, ro.leg, ro.s_tip, math.nan, math.nan, math.nan, False))
             return
         for d, s, w in zip(ro.rows[m, 0], ro.rows[m, 1], ro.rows[m, 2]):
-            self.pub.publish(self._width(stamp, ro.leg, s, d, w, True))
+            self.pub.publish(self._width(stamp, ro.leg, ro.s_tip, s, d, w, True))
 
-    def _width(self, stamp, leg, s, d, w, valid) -> Width:
+    def _width(self, stamp, leg, s_tip, s, d, w, valid) -> Width:
         out = Width()
         out.stamp = stamp
         out.source = self.camera
         out.leg = int(leg)
+        out.s_tip_mm = float(s_tip)            # the readout's tip position; the row's s = s_tip - d
         out.s_mm, out.d_mm, out.width_mm = float(s), float(d), float(w)
         out.valid = bool(valid)
         return out

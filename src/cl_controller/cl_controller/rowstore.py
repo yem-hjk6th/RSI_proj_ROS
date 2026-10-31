@@ -23,6 +23,15 @@ class Est:
     lag_s: float     # s, (s_tip - window centre) / v_tip
 
 
+def tip_position(s_mm: float, d_mm: float, s_tip_mm: float = math.nan) -> float:
+    """The nozzle position of a Width row: s_tip_mm when the publisher filled it (finite), else s_mm + d_mm.
+
+    The sum is often 1 ulp off the publisher's s_tip, which moves a row that sits exactly on the window edge
+    (s_dep = s_tip - d_min) in or out of the window."""
+    s_tip_mm = float(s_tip_mm)
+    return s_tip_mm if math.isfinite(s_tip_mm) else float(s_mm) + float(d_mm)
+
+
 class RowStore:
     def __init__(self, name: str, d_min: float):
         self.name, self.d_min = name, d_min

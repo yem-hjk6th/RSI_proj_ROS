@@ -78,12 +78,12 @@ def e1_items():
     rows = {f: g for f, g in RR.groupby("frame")}
     F = pd.read_csv(DATA / "raw_video" / f"elp_frames_{SES}.csv.gz", dtype=str)
     wall = dict(zip(F.frame_idx.astype(int), F.pc_ts_wall.astype(float)))
-    for fr, leg in zip(RO.frame.astype(int), RO.leg.astype(int)):
+    for fr, leg, s_tip in zip(RO.frame.astype(int), RO.leg.astype(int), RO.s_tip):
         g = rows.get(fr)
         recs = [(float(d), float(s), float(w), True) for d, s, w in zip(g.d, g.s_dep, g.w)] if g is not None \
             else [(math.nan, math.nan, math.nan, False)]
         for d, s, w, ok in recs:
-            m = Width(source="elp", leg=leg, s_mm=s, d_mm=d, width_mm=w, valid=ok)
+            m = Width(source="elp", leg=leg, s_mm=s, d_mm=d, s_tip_mm=_fl(s_tip), width_mm=w, valid=ok)
             items.append((T.WIDTH_ELP, m, _stamp(m, wall[fr])))
     items.sort(key=lambda x: x[2])
     return items

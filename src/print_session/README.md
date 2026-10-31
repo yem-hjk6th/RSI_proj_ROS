@@ -101,7 +101,7 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
 | `rsi_data` | `rsol_x_mm` … `rsol_c_deg` | empty (RSol is parsed by the bridge but not in its packet ring) |
 | `readout` | `frame` | `Width` has no frame index: frames are numbered 1, 2, … in stamp order, and `readout_rows` uses the same numbers |
 | `readout` | `t_frame_perf` | derived: frame stamp minus the bag's median `KrcState.stamp − ReplyRecord.pc_ts_perf` |
-| `readout` | `t_done_perf`, `compute_ms`, `skipped_total`, `s_tip`, `n_rows` | empty |
+| `readout` | `t_done_perf`, `compute_ms`, `skipped_total`, `n_rows` | empty |
 | `readout` | (rows) | frames the readout gated out publish nothing, so they are not in the export |
 | `readout` | `w_med_used` | recomputed from the published rows |
 | `readout_rows` | `frame` | renumbered as in `readout` |

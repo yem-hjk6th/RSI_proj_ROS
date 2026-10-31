@@ -65,7 +65,7 @@ def test_readout(e1_export):
     m = a != ""
     assert (a[m].astype(float) - b[m].astype(float)).abs().max() <= 1e-4 + 1e-9
     assert (a[m] != b[m]).sum() < 100
-    for c in ("t_done_perf", "compute_ms", "skipped_total", "s_tip", "n_rows"):
+    for c in ("t_done_perf", "compute_ms", "skipped_total", "n_rows"):
         assert (e[c] == "").all(), c
     t = e.t_frame_perf.astype(float) - o.t_frame_perf.astype(float)
     assert t.abs().max() < 0.05                                  # derived from the wall stamp: close, not equal

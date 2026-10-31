@@ -1,10 +1,11 @@
 """cl_controller node: Width + KrcState -> OverrideCmd. A thin wrapper around cl_controller.controller.Controller.
 
-Subscribes /krc/state (KrcState), /width/elp and /width/bore1 (Width); publishes /krc/override_cmd (OverrideCmd)
-every step_period_s while the controller heartbeat is fresh (the last update succeeded within wd_s and the newest
-KrcState is younger than ring_fresh_s). When it is not fresh nothing is published, so `seq` stops and the bridge's
-watchdog ramps to ov_default. After every law update it also publishes a CtrlRecord on /controller/ctrl_record
-(the legacy ctrl_<ses>.csv row, cl_controller.record). This node never talks to the robot and has no deadline of its
+Subscribes /krc/state (KrcState), /width/elp and /width/bore1 (Width: one row each; the tip position is s_tip_mm
+when it is finite, else s_mm + d_mm); publishes /krc/override_cmd (OverrideCmd) every step_period_s while the
+controller heartbeat is fresh (the last update succeeded within wd_s and the newest KrcState is younger than
+ring_fresh_s). When it is not fresh nothing is published, so `seq` stops and the bridge's watchdog ramps to ov_default.
+After every law update it also publishes a CtrlRecord on /controller/ctrl_record (the legacy ctrl_<ses>.csv row,
+cl_controller.record). This node never talks to the robot and has no deadline of its
 own: clamping, the watchdog, ov_outside and the 4 ms reply live in the bridge.
 
 Lock-step hook (parameter `lockstep`, default false; for replay tests only). There is no timer and no wall clock:
@@ -31,6 +32,7 @@ from .controller import Controller, Refused
 from .params import NODE_PARAMS, PARAMS, build_configs
 from .pattern import load_pattern, pattern_file
 from .record import ctrl_record
+from .rowstore import tip_position
 
 
 def _sec(stamp) -> float:
@@ -132,8 +134,8 @@ class ControllerNode(Node):
     def _on_width(self, src: str, m: Width, now=None) -> None:
         if not m.valid or not math.isfinite(m.width_mm):
             return
-        self.ctrl.push_rows(src, int(m.leg), m.s_mm + m.d_mm, [m.d_mm], [m.s_mm], [m.width_mm],
-                            self._now() if now is None else now)
+        self.ctrl.push_rows(src, int(m.leg), tip_position(m.s_mm, m.d_mm, m.s_tip_mm), [m.d_mm], [m.s_mm],
+                            [m.width_mm], self._now() if now is None else now)
 
     def _on_step(self) -> None:
         now = self._now()

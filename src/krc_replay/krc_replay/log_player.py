@@ -12,7 +12,8 @@ Modes (parameter ``mode``):
   readouts whose logged push time is at or before the logged time of that IPOC. Width.stamp is the frame time on the
   live clock: KrcState.stamp + (t_frame - t_logged(IPOC)). Readouts logged before the first IPOC seen are skipped.
 
-One Width message per row (``session.encode_rows``). bore1 rows come from the frames with pushed = 1.
+One Width message per row, with the logged values as they are: s_tip_mm = the readout's s_tip, s_mm = the row's s_dep,
+d_mm = the row's d (bore1: 5 mm). bore1 rows come from the frames with pushed = 1.
 """
 import csv
 import threading
@@ -29,7 +30,7 @@ from std_msgs.msg import Float64MultiArray
 from krc_interfaces.msg import KrcState, OverrideCmd, Width
 from krc_rsi_bridge.path_speed import PathSpeed
 
-from .session import encode_rows, load, sec_ns, sec_of
+from .session import load, sec_ns, sec_of
 
 KEEP_ALL = QoSProfile(depth=1, history=HistoryPolicy.KEEP_ALL, reliability=ReliabilityPolicy.RELIABLE)
 
@@ -74,11 +75,12 @@ class LogPlayer(Node):
     # ---------------------------------------------------------------- shared
     def _publish_readout(self, r, stamp: Time) -> None:
         pub = self.pub_w[r.src]
-        for (s, d), w in zip(encode_rows(r.s_tip, r.s), r.w):
+        for d, s, w in zip(r.d, r.s, r.w):
             m = Width()
             m.stamp = stamp
             m.source = r.src
             m.leg = int(r.leg)
+            m.s_tip_mm = float(r.s_tip)
             m.s_mm, m.d_mm, m.width_mm = float(s), float(d), float(w)
             m.valid = True
             pub.publish(m)

@@ -30,7 +30,9 @@ ros2 run cl_controller controller_node --ros-args --params-file config/e1.yaml
   window, `forced` after a speed-check latch.
 - The value is clamped to `[ov_min, ov_max]`, with `ov_min` raised to the speed floor. The bridge clamps again and
   owns `ov_outside`, the watchdog ramp and the reply.
-- One `Width` message is one row: `s_tip = s_mm + d_mm`. Messages with `valid = false` are ignored.
+- One `Width` message is one row. The tip position is `s_tip_mm` when it is finite, else `s_mm + d_mm`. The sum
+  can be 1 ulp off the publisher's tip, which matters for a row on the window edge. Messages with `valid = false` are
+  ignored.
 - `lockstep` (default `false`) is a hook for replay tests (`krc_replay`). With `true` there is no timer and no wall
   clock. Each `std_msgs/Float64MultiArray` on `/cl_controller/step` (`data = [t_update, n_state, n_elp, n_bore1]`)
   applies the first `n_*` queued inputs of each topic, runs one law update at `t_update` and publishes one
