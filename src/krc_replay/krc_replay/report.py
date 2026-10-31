@@ -147,4 +147,5 @@ def ramp_check(bridge_rows: List[tuple], ov_default: int, ramp_s: float, wd_code
     mono = all((b - a) * (ov_default - ov_from) >= 0 for a, b in zip(vals, vals[1:]))
     return dict(n_watchdog=len(wd), ov_from=ov_from, t0=t0, ipoc0=ip0, mismatch=bad, monotone=mono,
                 last=vals[-1], ramp_ipoc_s=((reach[1] - ip0) / 1000.0) if reach else None,
+                watchdog_span_s=wd[-1][0] - t0,
                 n_steps=len(set(vals)))

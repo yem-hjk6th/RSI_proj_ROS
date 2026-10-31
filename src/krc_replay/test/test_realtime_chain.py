@@ -96,6 +96,7 @@ def test_heartbeat_loss_ramps_to_default(e1, capsys):
             f"{der['ov_default']}: {rc.get('n_watchdog')} packets, {rc.get('n_steps')} values, mismatches vs the "
             f"linear ramp on the bridge clock {rc.get('mismatch')}, max |d| vs the linear ramp on the IPOC clock "
             f"{max(off) if off else float('nan'):.3f}, ramp length {rc.get('ramp_ipoc_s')} s (IPOC); "
+            f"sim overruns {st.overruns}; "
             f"sent {st.sent}, late {st.late_total} (longest run {st.max_consecutive_late}), "
             f"Timeout {'YES' if st.timeout_stopped else 'no'}")
     with capsys.disabled():
@@ -108,14 +109,22 @@ def test_heartbeat_loss_ramps_to_default(e1, capsys):
     assert all(der["ov_min"] <= v <= der["ov_max"] for v in rec.ov)
     assert rc["n_watchdog"] > 0
     assert rc["ov_from"] is not None and rc["ov_from"] != der["ov_default"]
-    # the watchdog takes over within one packet after wd_s without a heartbeat (bridge clock), and about wd_s
-    # after the stop (IPOC clock; the stop is seen through /krc/reply_record, a few 10 ms late)
-    assert 0.0 < rc["t0"] - run.hb_last - der["wd_s"] <= 0.02
+    # the watchdog never takes over before wd_s without a heartbeat (bridge clock), and with the next packet after
+    # it (a missed simulator slot delays that packet); about wd_s after the stop on the IPOC clock (the stop is seen
+    # through /krc/reply_record, a few 10 ms late)
+    assert 0.0 < rc["t0"] - run.hb_last - der["wd_s"] <= (0.02 if st.overruns == 0 else 0.25)
     assert abs((rc["ipoc0"] - run.stop_ipoc) / 1000.0 - der["wd_s"]) <= 0.25
     assert rc["mismatch"] == 0 and rc["monotone"]
     assert rc["last"] == der["ov_default"]
-    assert abs(rc["ramp_ipoc_s"] - der["fallback_ramp_s"]) <= 0.05
-    assert off and max(off) <= 1.0
+    # every watchdog packet follows the linear ramp exactly on the bridge's receive clock, and the whole ramp
+    # (fallback_ramp_s) was observed
+    assert rc["watchdog_span_s"] >= der["fallback_ramp_s"]
+    # on the IPOC clock (the KR C4's own time) as well, unless the simulator missed 4 ms slots: in replay mode an
+    # overrun shifts its schedule without advancing the IPOC, so the IPOC clock runs short by the time it lost
+    assert off
+    if st.overruns == 0:
+        assert abs(rc["ramp_ipoc_s"] - der["fallback_ramp_s"]) <= 0.05
+        assert max(off) <= 1.0
     assert all(got[r[1]] == r[2] for r in rows if r[1] in got)      # received == sent, per IPOC
     # after the stop nothing but control (before the watchdog) and watchdog
     assert {r[3] for r in rows if r[1] > rc["ipoc0"]} == {SRC_WATCHDOG}

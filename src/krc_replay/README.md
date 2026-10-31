@@ -56,6 +56,8 @@ E1's first leg start is 32 s after the window opening, so a 60 s slice cannot al
 
 The chain tests read the bridge's OvCmd, source and window state per IPOC from `/krc/reply_record` (`ReplyRecord`).
 
+The ROS tests run on their own ROS domain (50–99, set in `test/conftest.py`; `KRC_REPLAY_ROS_DOMAIN_ID` overrides it), so they do not cross-talk with other packages' tests that `colcon test` runs in parallel.
+
 Set `KRC_REPLAY_REPORT_DIR` to write the reports (`.json`, `.txt`) of tests 3–5.
 
 ```bash
