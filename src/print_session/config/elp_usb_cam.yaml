@@ -1,0 +1,23 @@
+# Example usb_cam (ros-jazzy-usb-cam 0.8.1) parameters for the ELP global-shutter camera. NOT tested on hardware.
+# Pass with: start_camera:=true camera_params:=<this file>. The bringup remaps usb_cam's image_raw to image_topic.
+# - pixel_format mjpeg2rgb: the camera sends MJPG (as in the legacy recorder), usb_cam decodes it and publishes
+#   sensor_msgs/Image with encoding rgb8, which width_readout_elp accepts.
+# - header.stamp = the V4L2 buffer timestamp (uvcvideo: CLOCK_MONOTONIC at the start of the frame), shifted to wall
+#   time by an offset usb_cam measures once at start. That is the capture time the readout needs, on the clock of
+#   KrcState.stamp; it is not the time the image reached the readout.
+# Check the device path, size and frame rate with `v4l2-ctl --list-formats-ext` on the edge PC.
+elp_camera:
+  ros__parameters:
+    video_device: /dev/video0          # placeholder: the ELP's device node
+    pixel_format: mjpeg2rgb
+    image_width: 1920
+    image_height: 1200
+    framerate: 60.0
+    io_method: mmap
+    frame_id: elp
+    camera_name: elp
+    autoexposure: false
+    exposure: 100                      # placeholder; the legacy profile set CAP_PROP_EXPOSURE -7 on DirectShow
+    gain: 0
+    auto_white_balance: false
+    white_balance: 4600                # legacy profile WB_KELVIN 4600
