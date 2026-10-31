@@ -5,6 +5,8 @@
   Each result goes into a bounded queue; a full queue drops the sample, it never blocks.
 - Every ``send_period_s`` it asks the ``OverrideSupervisor`` for the override (clamp, floor, heartbeat ramp) and sends
   ``<Ext><Ov>..</Ov><Seq>..</Seq></Ext>``.
+- A command with ``source == "forced"`` sets the supervisor's forced latch (ramp to ``ov_default``, never cleared
+  until restart).
 - Commands from ROS arrive through ``submit_command``, which only appends to a queue. The I/O thread never waits on
   ROS callbacks, and ROS callbacks never wait on the socket.
 
@@ -88,7 +90,7 @@ class EkiBridgeCore:
         self.clock = clock
         self.supervisor = OverrideSupervisor(cfg)
         self._chord_s, self._tau_v = chord_s, tau_v
-        self._cmd_q: "queue.SimpleQueue[Tuple[float, int, float]]" = queue.SimpleQueue()
+        self._cmd_q: "queue.SimpleQueue[Tuple[float, int, float, str]]" = queue.SimpleQueue()
         self._state_q: "queue.Queue[StateSample]" = queue.Queue(maxsize=state_queue_size)
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="EkiBridgeCore", daemon=True)
@@ -96,8 +98,9 @@ class EkiBridgeCore:
         self.status = CoreStatus()
 
     # ---- API for the ROS side (never blocks)
-    def submit_command(self, value_pct: float, seq: int) -> None:
-        self._cmd_q.put((float(value_pct), int(seq), self.clock()))
+    def submit_command(self, value_pct: float, seq: int, source: str = "") -> None:
+        """Queue one ``OverrideCmd``. ``source == "forced"`` sets the forced latch in the I/O thread."""
+        self._cmd_q.put((float(value_pct), int(seq), self.clock(), str(source)))
 
     def get_states(self, max_n: int = 1000) -> List[StateSample]:
         out: List[StateSample] = []
@@ -121,10 +124,10 @@ class EkiBridgeCore:
     def _drain_commands(self) -> None:
         while True:
             try:
-                value, seq, t = self._cmd_q.get_nowait()
+                value, seq, t, source = self._cmd_q.get_nowait()
             except queue.Empty:
                 return
-            self.supervisor.on_command(value, seq, t)
+            self.supervisor.on_command(value, seq, t, source)
 
     def _connect(self) -> Optional[socket.socket]:
         try:

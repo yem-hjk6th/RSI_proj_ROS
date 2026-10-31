@@ -1,7 +1,7 @@
 """ROS 2 node: a thin wrapper around ``EkiBridgeCore``.
 
 Publishes ``krc_interfaces/KrcState`` on ``/krc/state`` and subscribes to ``krc_interfaces/OverrideCmd`` on
-``/krc/override_cmd`` (``seq`` is the heartbeat). Clamp, floor and the heartbeat ramp live in the core
+``/krc/override_cmd`` (``seq`` is the heartbeat; ``source == "forced"`` latches forced open loop until restart). Clamp, floor and the heartbeat ramp live in the core
 (``safety.OverrideSupervisor``); the node never sends motion targets.
 
 KrcState fields over EKI (see docs in ``krc_eki_bridge/core.py``):
@@ -51,6 +51,7 @@ class EkiBridgeNode(Node):
             chord_s=p("chord_s", 0.1).value,
             tau_v=p("tau_v", 0.28).value,
         )
+        self._forced_logged = False
         self.pub = self.create_publisher(KrcState, "/krc/state", 50)
         self.sub = self.create_subscription(OverrideCmd, "/krc/override_cmd", self._on_cmd, 10)
         self.timer = self.create_timer(p("publish_period_s", 0.01).value, self._publish)
@@ -61,7 +62,10 @@ class EkiBridgeNode(Node):
             f"wd {cfg.wd_s} s, ramp {cfg.fallback_ramp_s} s")
 
     def _on_cmd(self, msg: OverrideCmd) -> None:
-        self.core.submit_command(msg.value_pct, msg.seq)  # never blocks
+        if msg.source == "forced" and not self._forced_logged:
+            self._forced_logged = True
+            self.get_logger().warning("forced open loop latched (ov_default, ramped) until restart")
+        self.core.submit_command(msg.value_pct, msg.seq, msg.source)  # never blocks
 
     def _publish(self) -> None:
         for s in self.core.get_states():

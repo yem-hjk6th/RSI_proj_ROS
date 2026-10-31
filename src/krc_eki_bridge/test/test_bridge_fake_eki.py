@@ -1,4 +1,5 @@
-"""EkiBridgeCore against the fake EKI server on localhost: state parsing, override send, heartbeat ramp, clamp."""
+"""EkiBridgeCore against the fake EKI server on localhost: state parsing, override send, heartbeat ramp, clamp,
+forced latch."""
 import time
 
 import pytest
@@ -115,6 +116,39 @@ def test_heartbeat_ramp(server):
         seq += 1
         core.submit_command(80, seq)
         assert wait_for(lambda: server.ov_pro == 80, 1.0)
+    finally:
+        stop(core)
+
+
+def test_forced_latch_ramps_and_ignores_later_commands(server):
+    core = make_core(server.port)
+    try:
+        assert wait_for(lambda: core.status.connected)
+        seq = 0
+        t_end = time.monotonic() + 0.3
+        while time.monotonic() < t_end:
+            seq += 1
+            core.submit_command(90, seq, "elp")
+            time.sleep(0.02)
+        assert wait_for(lambda: server.ov_pro == 90)
+        n0 = len(server.received_copy())
+        seq += 1
+        core.submit_command(50, seq, "forced")
+        t_end = time.monotonic() + 0.6 + 0.3      # ramp + margin, with fresh control commands all along
+        while time.monotonic() < t_end:
+            seq += 1
+            core.submit_command(85, seq, "elp")
+            time.sleep(0.02)
+        assert core.supervisor.forced
+        assert core.status.last_out == (50, "forced")
+        ovs = [r.ov for r in server.received_copy()[n0:]]
+        assert ovs[0] == 90 and ovs[-1] == 50
+        assert all(a >= b for a, b in zip(ovs, ovs[1:]))   # a ramp down, never back to 85
+        assert any(55 <= v <= 85 for v in ovs)               # intermediate values: a ramp, not a jump
+        # heartbeat loss does not end the latch either
+        time.sleep(0.3 + 0.2)
+        assert core.status.last_out == (50, "forced")
+        assert server.ov_pro == 50
     finally:
         stop(core)
 
