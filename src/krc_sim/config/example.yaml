@@ -1,0 +1,21 @@
+# Example parameters of the fake KR C4. Placeholders in <...>.
+krc_sim:
+  ros__parameters:
+    host: "127.0.0.1"                 # the bridge (PC) address; the simulator is meant for localhost
+    port: 59152
+    mode: "pattern"                   # pattern | replay
+    period_s: 0.004
+    timeout_packets: 100              # ETHERNET Timeout of the RSI context
+    duration_s: 0.0                   # 0 = until the pattern / file ends
+    pattern_file: "<PATH_TO>/pattern_usr_ELP_R1v30_CLp_261022.json"   # installed in share/krc_sim/patterns
+    lead_in_mm: 20.0
+    tail_s: 0.5
+    abc_deg: [0.0, 90.0, 0.0]
+    ov_initial: 100
+    apply_override: true
+    ov_if_absent: 1
+    ov_tau_s: 0.0
+    rpm_ext: 120
+    ipoc0: 1000000
+    replay_file: "<PATH_TO>/rsi_data_20261022_165128.csv.gz"
+    replay_start_row: 0
