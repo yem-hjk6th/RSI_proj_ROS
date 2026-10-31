@@ -3,19 +3,21 @@
 Subscribes /krc/state (KrcState), /width/elp and /width/bore1 (Width); publishes /krc/override_cmd (OverrideCmd)
 every step_period_s while the controller heartbeat is fresh (the last update succeeded within wd_s and the newest
 KrcState is younger than ring_fresh_s). When it is not fresh nothing is published, so `seq` stops and the bridge's
-watchdog ramps to ov_default. This node never talks to the robot and has no deadline of its own: clamping, the
-watchdog, ov_outside and the 4 ms reply live in the bridge.
+watchdog ramps to ov_default. After every law update it also publishes a CtrlRecord on /controller/ctrl_record
+(the legacy ctrl_<ses>.csv row, cl_controller.record). This node never talks to the robot and has no deadline of its
+own: clamping, the watchdog, ov_outside and the 4 ms reply live in the bridge.
 
 Lock-step hook (parameter `lockstep`, default false; for replay tests only). There is no timer and no wall clock:
 - inputs are queued as they arrive (reliable QoS, keep all) and applied only when a step asks for them;
 - a std_msgs/Float64MultiArray on /cl_controller/step, data = [t_update, n_state, n_elp, n_bore1], applies the first
   n_state KrcState and n_elp / n_bore1 Width messages received so far (waiting until that many have arrived), then
-  runs one law update at t_update and publishes one OverrideCmd (seq = step number);
+  runs one law update at t_update and publishes one OverrideCmd (seq = step number) and one CtrlRecord;
 - time comes from the messages: KrcState.stamp as in normal mode, Width.stamp as the time the row store receives the
   row (in normal mode: the receive time), t_update for the update.
 So the result does not depend on how the executor interleaves the topics.
 """
 import math
+import time
 from collections import deque
 from pathlib import Path
 
@@ -23,11 +25,12 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 
-from krc_interfaces.msg import KrcState, OverrideCmd, Width
+from krc_interfaces.msg import CtrlRecord, KrcState, OverrideCmd, Width
 
 from .controller import Controller, Refused
 from .params import NODE_PARAMS, PARAMS, build_configs
 from .pattern import load_pattern, pattern_file
+from .record import ctrl_record
 
 
 def _sec(stamp) -> float:
@@ -71,6 +74,7 @@ class ControllerNode(Node):
         self.create_subscription(Width, "/width/elp", lambda m: self._on_width("elp", m), 200)
         self.create_subscription(Width, "/width/bore1", lambda m: self._on_width("bore1", m), 200)
         self.pub = self.create_publisher(OverrideCmd, "/krc/override_cmd", 10)
+        self.pub_rec = self.create_publisher(CtrlRecord, "/controller/ctrl_record", 50)
         self.create_timer(float(p["step_period_s"]), self._on_step)
 
     # ---------------------------------------------------------------- lock-step hook (parameter lockstep)
@@ -86,6 +90,7 @@ class ControllerNode(Node):
         self.create_subscription(Width, "/width/bore1", lambda m: self._ls_in("bore1", m), keep_all)
         self.create_subscription(Float64MultiArray, "/cl_controller/step", self._ls_step, keep_all)
         self.pub = self.create_publisher(OverrideCmd, "/krc/override_cmd", keep_all)
+        self.pub_rec = self.create_publisher(CtrlRecord, "/controller/ctrl_record", keep_all)
 
     def _ls_in(self, kind: str, m) -> None:
         self._q[kind].append(m)
@@ -114,6 +119,7 @@ class ControllerNode(Node):
             self.ctrl.update(t)
             self.ctrl.t_update_ok = t
             self.ctrl.refresh_heartbeat(t)
+            self._publish_record(t)
             self._publish(self.ctrl.published_ov())
 
     # ---------------------------------------------------------------- normal mode
@@ -136,6 +142,8 @@ class ControllerNode(Node):
         except Exception as e:  # noqa: BLE001 - no publish: the heartbeat goes stale and the bridge takes over
             self.get_logger().error(f"controller step failed: {e!r}", throttle_duration_sec=1.0)
             return
+        if self.ctrl.t_update_ok == now:           # an update ran in this step (legacy on_update)
+            self._publish_record(now)
         if self.ctrl.heartbeat != now:
             return
         self._publish(ov)
@@ -148,6 +156,17 @@ class ControllerNode(Node):
         self.seq += 1
         msg.seq = self.seq
         self.pub.publish(msg)
+
+    def _publish_record(self, now: float) -> None:
+        try:
+            rec = ctrl_record(self.ctrl, now, time.perf_counter())
+            stamp = rec.pop("t_wall")
+            msg = CtrlRecord(**rec)
+            sec = math.floor(stamp)
+            msg.stamp.sec, msg.stamp.nanosec = int(sec), min(999999999, int(round((stamp - sec) * 1e9)))
+            self.pub_rec.publish(msg)
+        except Exception as e:  # noqa: BLE001 - the record must never stop the controller
+            self.get_logger().error(f"ctrl record failed: {e!r}", throttle_duration_sec=5.0)
 
 
 def main(args=None):

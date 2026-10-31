@@ -42,7 +42,8 @@ def _chain_case(e1, capsys, name, start_row, n_packets):
     rep = chain_report(sess, start_row, run.st, run.rec, bridge, run.bridge_dropped,
                        (der["ov_min"], der["ov_max"]))
     rep.extra.update(n_override_cmd=run.n_cmd, n_width=run.n_width)
-    text = f"[{name}] " + rep.text() + f"\nOverrideCmd received by the bridge {run.n_cmd}, Width published {run.n_width}"
+    text = (f"[{name}] " + rep.text()
+            + f"\nOverrideCmd received by the bridge {run.n_cmd}, Width published {run.n_width}")
     with capsys.disabled():
         print("\n" + text)
     save_report(name, rep.as_dict(), text)
@@ -56,6 +57,7 @@ def _chain_case(e1, capsys, name, start_row, n_packets):
     assert rep.window_compared >= 0.98 * rep.sent
     assert rep.window_mismatch == 0, rep.window_mismatch_ipocs
     assert rep.reply_vs_bridge_mismatch == 0
+    assert rep.replies_without_record == 0           # every reply is in the bridge's ReplyRecord stream
     assert run.n_cmd > 0 and run.n_width > 0
     return rep
 
@@ -107,7 +109,7 @@ def test_heartbeat_loss_ramps_to_default(e1, capsys):
     assert rc["n_watchdog"] > 0
     assert rc["ov_from"] is not None and rc["ov_from"] != der["ov_default"]
     # the watchdog takes over within one packet after wd_s without a heartbeat (bridge clock), and about wd_s
-    # after the stop (IPOC clock; the stop is seen through the packet ring, a few 10 ms late)
+    # after the stop (IPOC clock; the stop is seen through /krc/reply_record, a few 10 ms late)
     assert 0.0 < rc["t0"] - run.hb_last - der["wd_s"] <= 0.02
     assert abs((rc["ipoc0"] - run.stop_ipoc) / 1000.0 - der["wd_s"]) <= 0.25
     assert rc["mismatch"] == 0 and rc["monotone"]

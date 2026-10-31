@@ -1,20 +1,24 @@
 """ROS 2 wrapper of the RSI bridge. All RSI timing lives in the reply process (``server.py``).
 
 - publishes ``krc_interfaces/KrcState`` on ``/krc/state``, one message per RSI packet;
+- publishes ``krc_interfaces/ReplyRecord`` on ``/krc/reply_record``, one per packet: the OvCmd decided for it, its
+  source, whether the reply carried it, the packet's Delay and the reply latency (legacy ``ov_cmd_<ses>.csv``);
 - subscribes to ``krc_interfaces/OverrideCmd`` on ``/krc/override_cmd``. A message whose ``seq`` differs
   from the previous one is a heartbeat; ``source == "forced"`` sets the forced latch (never cleared).
 
-Nothing here can delay a reply: callbacks only write shared values or read the packet ring.
+Nothing here can delay a reply: callbacks only write shared values or read the packet ring. Both topics are filled
+from the ring, after the reply process has sent the reply.
 """
 import math
 
 import rclpy
 from builtin_interfaces.msg import Time
-from krc_interfaces.msg import KrcState, OverrideCmd
+from krc_interfaces.msg import KrcState, OverrideCmd, ReplyRecord
 from rclpy.node import Node
 
 from .decider import DeciderConfig
 from .path_speed import PathSpeed
+from .records import reply_fields
 from .server import RsiServer, ServerConfig, source_code
 from .shared import F
 
@@ -53,6 +57,8 @@ class RsiBridgeNode(Node):
             ring_capacity=int(p["ring_capacity"])))
         self.speed = PathSpeed(float(p["tau_v"]), int(p["k_chord"]))
         self.pub = self.create_publisher(KrcState, "/krc/state", 100)
+        self.pub_reply = self.create_publisher(ReplyRecord, "/krc/reply_record", 100)
+        self.ov_sent = p["mode"] in ("closed", "step")
         self.sub = self.create_subscription(OverrideCmd, "/krc/override_cmd", self.on_override, 10)
         self._last_seq = None
         self.n_cmd = 0
@@ -90,6 +96,9 @@ class RsiBridgeNode(Node):
             m.rpm_ext = int(s[F["rpm_ext"]])
             m.late_replies = int(s[F["late"]])
             self.pub.publish(m)
+            r = ReplyRecord(**reply_fields(s, self.ov_sent))
+            r.stamp = m.stamp
+            self.pub_reply.publish(r)
 
     def destroy_node(self):
         self.server.stop()

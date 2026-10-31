@@ -43,9 +43,9 @@ def encode_rows(s_tip: float, s: Sequence[float]) -> List[Tuple[float, float]]:
 
     s_mm is the logged s_dep, bit for bit (it is the position the row is binned at). d_mm is s_tip - s_dep, moved by
     a few ulp so that s_mm + d_mm comes as close to s_tip as the ulp of d allows (equal to it except for some rows
-    with a small s_tip, whose ulp is finer than d's); it differs from the logged d by ~1e-14 mm. Sending the logged d as is gives a tip
-    1 ulp off on many rows, which moves a row that sits exactly on the window edge (s_dep = s_tip - d_min) in or out
-    of the window: on E1 that changes the published OvCmd at update 625.
+    with a small s_tip, whose ulp is finer than d's); it differs from the logged d by ~1e-14 mm. Sending the logged d
+    as is gives a tip 1 ulp off on many rows, which moves a row that sits exactly on the window edge
+    (s_dep = s_tip - d_min) in or out of the window: on E1 that changes the published OvCmd at update 625.
     """
     out = []
     for ss in s:

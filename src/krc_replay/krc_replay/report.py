@@ -1,7 +1,8 @@
 """Checks and report of a real-time replay run. No ROS imports.
 
-Inputs: the simulator's per-reply record (what the KR C4 received), the bridge's per-packet record (the reply loop's
-packet ring: IPOC, OvCmd sent, source, window state) and the session log (ov_cmd_<ses>.csv: what the legacy run sent).
+Inputs: the simulator's per-reply record (what the KR C4 received), the bridge's per-packet record (ReplyRecord on
+/krc/reply_record: IPOC, OvCmd sent, source, window state) and the session log (ov_cmd_<ses>.csv: what the legacy
+run sent).
 """
 import math
 from dataclasses import asdict, dataclass, field
@@ -33,6 +34,7 @@ class ChainReport:
     window_mismatch: int
     window_mismatch_ipocs: List[int]
     reply_vs_bridge_mismatch: int
+    replies_without_record: int
     agreement_n: int
     agreement_identical_share: float
     agreement_abs_diff_median: float
@@ -58,7 +60,8 @@ class ChainReport:
                 f"p99 {self.latency_ms_p99:.3f} ms, max {self.latency_ms_max:.3f} ms\n"
                 f"window state (bridge vs logged source, outside vs rest): {self.window_compared} packets, "
                 f"{self.window_mismatch} differ; KR C4 received == bridge sent: "
-                f"{self.reply_vs_bridge_mismatch} differ; bridge ring dropped {self.bridge_dropped}\n"
+                f"{self.reply_vs_bridge_mismatch} differ, {self.replies_without_record} replies without a ReplyRecord; "
+                f"bridge ring dropped {self.bridge_dropped}\n"
                 f"agreement replied OvCmd vs logged ov_cmd per IPOC: n {self.agreement_n}, identical "
                 f"{100 * self.agreement_identical_share:.2f} %, |d| median {self.agreement_abs_diff_median:g}, "
                 f"p95 {self.agreement_abs_diff_p95:g}, max {self.agreement_abs_diff_max:g}; inside the window only: "
@@ -74,7 +77,7 @@ def _pct(v: List[float], q: float) -> float:
 
 def chain_report(sess, start_row: int, st, rec, bridge: Dict[int, tuple], bridge_dropped: int,
                  ov_window) -> ChainReport:
-    """bridge: IPOC -> (ov_sent, source code, window state code) from the bridge's packet ring."""
+    """bridge: IPOC -> (ov_sent, source code, window state code) from the bridge's ReplyRecord stream."""
     lo, hi = int(ov_window[0]), int(ov_window[1])
     r_ipoc = np.asarray(rec.ipoc, np.int64)
     r_ov = np.asarray(rec.ov, np.int64)
@@ -95,6 +98,7 @@ def chain_report(sess, start_row: int, st, rec, bridge: Dict[int, tuple], bridge
             mism.append(int(ip))
     # what the KR C4 received equals what the bridge sent
     rb = sum(1 for ip, ov in zip(r_ipoc, r_ov) if int(ip) in bridge and bridge[int(ip)][0] != ov)
+    no_rec = sum(1 for ip in r_ipoc if int(ip) not in bridge)
     # agreement with the logged run
     idx = [log_row.get(int(ip)) for ip in r_ipoc]
     ok = np.array([i is not None for i in idx], bool)
@@ -109,6 +113,7 @@ def chain_report(sess, start_row: int, st, rec, bridge: Dict[int, tuple], bridge
         replies=n_rep, replies_nonzero_rkorr=bad_rk, replies_out_of_window=out_win, ov_window=[lo, hi],
         bridge_packets=len(bridge), bridge_dropped=int(bridge_dropped), window_compared=n_cmp,
         window_mismatch=len(mism), window_mismatch_ipocs=mism[:20], reply_vs_bridge_mismatch=int(rb),
+        replies_without_record=int(no_rec),
         agreement_n=int(d.size), agreement_identical_share=float(np.mean(d == 0)) if d.size else math.nan,
         agreement_abs_diff_median=float(np.median(d)) if d.size else math.nan,
         agreement_abs_diff_p95=float(np.quantile(d, 0.95)) if d.size else math.nan,
@@ -119,7 +124,8 @@ def chain_report(sess, start_row: int, st, rec, bridge: Dict[int, tuple], bridge
 
 
 def ramp_check(bridge_rows: List[tuple], ov_default: int, ramp_s: float, wd_code: int = 5):
-    """Linear watchdog ramp in the bridge's packet record (t_perf, ipoc, ov_sent, src, ...) after a heartbeat loss.
+    """Linear watchdog ramp in the bridge's per-packet record (pc_ts_perf, ipoc, ov_cmd, src code, ...) after a
+    heartbeat loss.
 
     Returns a dict: ov_from, t0, the expected value per watchdog packet (round(ov_from + f (ov_default - ov_from)),
     f = (t - t0) / ramp_s capped at 1), the number of packets that differ, and the ramp's duration in IPOC time.

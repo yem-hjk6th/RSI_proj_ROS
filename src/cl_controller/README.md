@@ -14,7 +14,8 @@ plain Python and wrapped in a thin ROS 2 node.
 | `pattern.py` | `rt_readout.Pattern`, `rt_law_v3` helpers | pattern geometry, program speeds, plateaus |
 | `params.py` | `run_cl.py` arguments | node parameters with the legacy defaults; config building |
 | `replay.py` | – | offline replay of a logged session |
-| `node.py` | – | `/krc/state` + `/width/elp` + `/width/bore1` → `/krc/override_cmd` |
+| `node.py` | – | `/krc/state` + `/width/elp` + `/width/bore1` → `/krc/override_cmd`; `/controller/ctrl_record` (`CtrlRecord`) after every update |
+| `record.py` | `run_cl.py` `log_update`, `CTRL_COLS` | controller → one `ctrl_<ses>.csv` row (unrounded) |
 
 ## Node
 
@@ -33,7 +34,7 @@ ros2 run cl_controller controller_node --ros-args --params-file config/e1.yaml
 - `lockstep` (default `false`) is a hook for replay tests (`krc_replay`). With `true` there is no timer and no wall
   clock. Each `std_msgs/Float64MultiArray` on `/cl_controller/step` (`data = [t_update, n_state, n_elp, n_bore1]`)
   applies the first `n_*` queued inputs of each topic, runs one law update at `t_update` and publishes one
-  `OverrideCmd`. In this mode `Width.stamp` is taken as the time the row store receives the row.
+  `OverrideCmd` and one `CtrlRecord`. In this mode `Width.stamp` is taken as the time the row store receives the row.
 
 ## Parameters
 

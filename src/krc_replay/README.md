@@ -54,6 +54,8 @@ E1's first leg start is 32 s after the window opening, so a 60 s slice cannot al
 
 **Heartbeat loss (test 5).** Same start. The controller is stopped at the logged IPOC of 65.5 s, on leg 1, where the logged OvCmd is 34–39 (away from `ov_default` 40). The run goes on to 70.0 s.
 
+The chain tests read the bridge's OvCmd, source and window state per IPOC from `/krc/reply_record` (`ReplyRecord`).
+
 Set `KRC_REPLAY_REPORT_DIR` to write the reports (`.json`, `.txt`) of tests 3–5.
 
 ```bash

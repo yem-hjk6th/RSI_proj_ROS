@@ -1,7 +1,7 @@
 """The real-time chain in one test process: krc_sim (replay mode, its own process, with a per-reply record) ->
 krc_rsi_bridge node (closed, reply loop in its own process) -> cl_controller node -> bridge; log_player (realtime)
 publishes Width keyed to the bridge's IPOC. The ROS nodes run in-process, each on its own executor thread, so the
-test can read the bridge's packet ring (OvCmd sent, source and window state per IPOC) and stop the controller."""
+test can stop the controller. The bridge's OvCmd, source and window state per IPOC come from /krc/reply_record."""
 import json
 import threading
 import time
@@ -16,7 +16,7 @@ import replay_paths as P
 class ChainRun:
     st: object
     rec: object
-    bridge_rows: List[tuple] = field(default_factory=list)   # (t_perf, ipoc, ov_sent, src, win_state)
+    bridge_rows: List[tuple] = field(default_factory=list)   # ReplyRecord: (t_perf, ipoc, ov, src, win) codes
     bridge_dropped: int = 0
     n_cmd: int = 0
     n_width: int = 0
@@ -35,8 +35,12 @@ def run_chain(start_row: int, n_packets: int, stop_at_ipoc: Optional[int] = None
     from krc_replay.params import bridge_params, controller_params
     from krc_replay.recording_sim import RecordingSimProcess, replay_config
     from krc_replay.session import load
+    from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
+
+    from krc_interfaces.msg import ReplyRecord
     from krc_rsi_bridge.bridge_node import RsiBridgeNode
-    from krc_rsi_bridge.shared import F
+    from krc_rsi_bridge.decider import SRC_OUT
+    from krc_rsi_bridge.window import STATE_CODE
 
     sess = load(str(P.SESSION))
     port = P.free_udp_port()
@@ -46,21 +50,21 @@ def run_chain(start_row: int, n_packets: int, stop_at_ipoc: Optional[int] = None
     try:
         bridge = RsiBridgeNode(parameter_overrides=[Parameter(k, value=v)
                                                     for k, v in bridge_params(cp, port).items()])
-        orig = bridge.server.read_packets
-
-        def tee(max_n=None):
-            pk = orig(max_n)
-            rows.extend((s[F["t_perf"]], int(s[F["ipoc"]]), int(s[F["ov_sent"]]), int(s[F["src"]]),
-                         int(s[F["win_state"]])) for s in pk)
-            return pk
-
-        bridge.server.read_packets = tee
         ctrl = ControllerNode(parameter_overrides=[Parameter(k, value=v) for k, v in cp.items()])
         player = LogPlayer(parameter_overrides=[Parameter("session_dir", value=str(P.SESSION)),
                                                 Parameter("mode", value="realtime")])
+        recorder = rclpy.create_node("reply_recorder")
+
+        def on_reply(m):
+            rows.append((m.pc_ts_perf, int(m.ipoc), int(m.ov_cmd), SRC_OUT.index(m.source),
+                         STATE_CODE.get(m.win, -1)))
+
+        recorder.create_subscription(ReplyRecord, "/krc/reply_record", on_reply,
+                                     QoSProfile(depth=1, history=HistoryPolicy.KEEP_ALL,
+                                                reliability=ReliabilityPolicy.RELIABLE))
         exs = {}
         threads = []
-        for name, node in (("bridge", bridge), ("ctrl", ctrl), ("player", player)):
+        for name, node in (("bridge", bridge), ("ctrl", ctrl), ("player", player), ("recorder", recorder)):
             ex = SingleThreadedExecutor()
             ex.add_node(node)
             exs[name] = ex
@@ -80,7 +84,7 @@ def run_chain(start_row: int, n_packets: int, stop_at_ipoc: Optional[int] = None
                 break
             time.sleep(0.005)
         run.st, run.rec = sim.result(timeout=5.0)
-        time.sleep(0.3)                                   # let the bridge read the last packets
+        time.sleep(0.5)                                   # let the last ReplyRecords arrive
         run.n_cmd, run.n_width = bridge.n_cmd, player.n_width
         for ex in exs.values():
             ex.shutdown()
@@ -88,6 +92,7 @@ def run_chain(start_row: int, n_packets: int, stop_at_ipoc: Optional[int] = None
             th.join(5.0)
         run.bridge_dropped = bridge.server.dropped
         run.hb_last = float(bridge.server.sh.hb.value)
+        recorder.destroy_node()
         player.destroy_node()
         ctrl.destroy_node()
         bridge.destroy_node()
