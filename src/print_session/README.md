@@ -14,6 +14,12 @@ ros2 run print_session bag_to_legacy sessions/<ses>/bag --out exported
 python3 legacy/realtime_cl_261023/eval_v3_print.py --data exported --session <ses> --pattern <pattern json>
 ```
 
+> **Shadow mode on `RSI_OV4` means 1 % override.** In shadow mode the reply carries no `<OvCmd>`. On a KRC program that
+> uses `RSI_OV4` (`RSI_CREATE("RSI_OV4.rsi")`) the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and the
+> robot runs at 1 % override (`legacy/README.md`; `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). Run shadow
+> mode with a print program on `RSI_MIN`. The bringup logs this as a warning at start-up, and the session node logs
+> it again as a `WARN` line (`startup.SHADOW_WARNING`).
+
 ## Bringup (`launch/bringup.launch.py`)
 
 | Argument | Default | |
@@ -114,6 +120,6 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
 |---|---|
 | `test_roundtrip.py` | 1: E1 CSVs → bag (`test/e1_bag.py`, test-only writer) → export → every carried column equal to the original string. |
 | `test_eval_unchanged.py` | 2: the legacy eval on the original logs reproduces the stored eval JSON (keys that need inputs not in this repository are listed). On the exported logs it gives the same result. |
-| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter). 4: the launch refuses without `mode`. |
-| `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals. |
+| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter, the shadow-mode warning in the log). 4: the launch refuses without `mode`. |
+| `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only). |
 | `test_export_unit.py` | Exporter formats and joins on hand-made messages. |

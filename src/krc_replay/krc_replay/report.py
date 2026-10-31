@@ -149,3 +149,76 @@ def ramp_check(bridge_rows: List[tuple], ov_default: int, ramp_s: float, wd_code
                 last=vals[-1], ramp_ipoc_s=((reach[1] - ip0) / 1000.0) if reach else None,
                 watchdog_span_s=wd[-1][0] - t0,
                 n_steps=len(set(vals)))
+
+
+@dataclass
+class LinkReport:
+    """Latency test of the RSI link (T9): krc_sim against a bridge on another host. No session log is involved."""
+
+    host: str
+    port: int
+    duration_s: float
+    sent: int
+    on_time: int
+    late_total: int
+    max_consecutive_late: int
+    timeout_packets: int
+    timeout_stopped: bool
+    ipoc_mismatch: int
+    sim_overruns: int
+    replies: int
+    replies_nonzero_rkorr: int
+    replies_without_ovcmd: int
+    replies_out_of_window: int
+    ov_window: List[int]
+    ov_seen: List[int]
+    rtt_ms_p50: float
+    rtt_ms_p99: float
+    rtt_ms_max: float
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+    def ok(self) -> bool:
+        """The safety checks: no RSI Timeout, RKorr = 0 in every reply, every reply has an OvCmd inside the window."""
+        return (not self.timeout_stopped and self.replies_nonzero_rkorr == 0 and self.replies_without_ovcmd == 0
+                and self.replies_out_of_window == 0)
+
+    def text(self) -> str:
+        lo, hi = self.ov_window
+        seen = (", ".join(map(str, self.ov_seen)) if len(self.ov_seen) <= 8
+                else f"{len(self.ov_seen)} values, {self.ov_seen[0]}..{self.ov_seen[-1]}") if self.ov_seen else "none"
+        return "\n".join([
+            f"RSI latency test: krc_sim -> bridge {self.host}:{self.port}, {self.duration_s:g} s at 4 ms",
+            f"  packets sent            {self.sent}",
+            f"  replies on time         {self.on_time}",
+            f"  late replies            {self.late_total} (longest run {self.max_consecutive_late}; "
+            f"Timeout at {self.timeout_packets})",
+            f"  Timeout                 {'YES' if self.timeout_stopped else 'no'}",
+            f"  round trip (on time)    p50 {self.rtt_ms_p50:.3f} ms, p99 {self.rtt_ms_p99:.3f} ms, "
+            f"max {self.rtt_ms_max:.3f} ms",
+            f"  nonzero RKorr           {self.replies_nonzero_rkorr}",
+            f"  OvCmd outside {lo}..{hi}{' ' * max(0, 9 - len(f'{lo}..{hi}'))} {self.replies_out_of_window}",
+            f"  replies without OvCmd   {self.replies_without_ovcmd}"
+            + ("  (shadow mode? on RSI_OV4 that is 1 % override)" if self.replies_without_ovcmd else ""),
+            f"  OvCmd values seen       {seen}",
+            f"  stale replies           {self.ipoc_mismatch} (old IPOC); simulator overruns {self.sim_overruns}",
+            f"  result                  {'PASS' if self.ok() else 'FAIL'}",
+        ])
+
+
+def link_report(host: str, port: int, duration_s: float, st, rec, ov_window, timeout_packets: int = 100) -> LinkReport:
+    """st: krc_sim SimStats; rec: krc_replay.recording_sim.ReplyRecord (accepted replies, OvCmd -1 = absent)."""
+    lo, hi = int(ov_window[0]), int(ov_window[1])
+    ov = [int(v) for v in rec.ov]
+    present = [v for v in ov if v >= 0]
+    lat = [1e3 * x for x in st.latencies_s]
+    return LinkReport(
+        host=str(host), port=int(port), duration_s=float(duration_s), sent=st.sent, on_time=st.on_time,
+        late_total=st.late_total, max_consecutive_late=st.max_consecutive_late, timeout_packets=int(timeout_packets),
+        timeout_stopped=bool(st.timeout_stopped), ipoc_mismatch=st.ipoc_mismatch, sim_overruns=st.overruns,
+        replies=len(ov), replies_nonzero_rkorr=int(sum(1 for z in rec.rkorr_zero if not z)),
+        replies_without_ovcmd=len(ov) - len(present),
+        replies_out_of_window=int(sum(1 for v in present if v < lo or v > hi)), ov_window=[lo, hi],
+        ov_seen=sorted(set(present)), rtt_ms_p50=_pct(lat, 50), rtt_ms_p99=_pct(lat, 99),
+        rtt_ms_max=max(lat) if lat else math.nan)
