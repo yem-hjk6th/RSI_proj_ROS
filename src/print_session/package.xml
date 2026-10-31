@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>print_session</name>
+  <version>0.1.0</version>
+  <description>Print session on the edge PC: bringup of the edge stack, start-up checks, session_meta.json, rosbag2 recording and the export of a bag to the legacy CSV logs (port of the legacy run_cl.py).</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>krc_interfaces</exec_depend>
+  <exec_depend>krc_rsi_bridge</exec_depend>
+  <exec_depend>cl_controller</exec_depend>
+  <exec_depend>width_readout_elp</exec_depend>
+  <exec_depend>ros2bag</exec_depend>
+  <exec_depend>rosbag2_py</exec_depend>
+  <exec_depend>rosbag2_storage_mcap</exec_depend>
+  <exec_depend>rosidl_runtime_py</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <!-- The camera driver (usb_cam, ros-jazzy-usb-cam) is optional: only start_camera:=true needs it. -->
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-pandas</test_depend>
+  <test_depend>python3-numpy</test_depend>
+  <test_depend>krc_sim</test_depend>
+  <test_depend>ros2launch</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

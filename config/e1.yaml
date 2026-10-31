@@ -6,6 +6,9 @@
 # speed floor ceil(3.4 x 100 / 30) = 12, so the window is 12..100.
 #
 # Usage: ros2 run cl_controller controller_node --ros-args --params-file config/e1.yaml
+#        ros2 launch print_session bringup.launch.py mode:=shadow params_file:=config/e1.yaml   (the whole edge stack)
+# The bringup takes `mode` from its launch argument, not from this file. It derives the bridge's limits and pattern
+# from the cl_controller section.
 cl_controller:
   ros__parameters:
     mode: closed
@@ -44,3 +47,40 @@ cl_controller:
     target_schedule: const
     speed_check: latch
     step_period_s: 0.05
+
+# RSI bridge (krc_rsi_bridge). The bringup sets mode, pattern_file, ov_min / ov_max / ov_outside / ov_default,
+# v_min_mm_s, fallback_ramp_s, wd_s, the window tolerances, step_seq / step_hold_s and tau_v from cl_controller and
+# refuses a different value here. Only the network and real-time settings belong in this section.
+krc_rsi_bridge:
+  ros__parameters:
+    host: 0.0.0.0              # placeholder: the edge PC's address on the KRC network (RSI_EthernetConfig.xml)
+    port: 59152                # placeholder: the port in RSI_EthernetConfig.xml
+    deadline_s: 0.004
+    rt_priority: 0             # SCHED_FIFO priority of the reply process on the edge PC; 0 = not set
+    cpu: -1                    # pin the reply process to this CPU; -1 = no pinning
+    ring_capacity: 8192
+    publish_period_s: 0.01
+    k_chord: 25
+
+# ELP readout (width_readout_elp). The bringup sets image_topic (launch argument) and pattern_json (the controller's
+# pattern); rig_json empty = the packaged CAGE1012 rig.
+width_readout_elp:
+  ros__parameters:
+    camera: elp
+    state_topic: /krc/state
+    width_topic: /width/elp
+    rig_json: ""
+    root: ""
+    d_min: 12.0
+    use_header_stamp: true     # the image stamp is the capture time (usb_cam: V4L2 buffer time)
+
+# Session node (print_session).
+print_session:
+  ros__parameters:
+    # E1 ran plan A_b1 (bore1 first). The bringup refuses it unless a bore1 readout publishes /width/bore1
+    # (legacy run_cl.py refused it when the bore1 head did not load). width_readout_bore1 is not in this repository
+    # yet, so this stays false: to run this file without bore1, set cl_controller plan: A.
+    bore1_readout: false
+    disconnect_timeout_s: 2.0  # E1 session_meta rsi.disconnect_timeout_s
+    src_name: usr_ELP_R1v30_CLp_261022.src   # the program E1 ran (session_meta src_name)
+    ceiling_light: "on"        # E1 session_meta ceiling_light
