@@ -8,6 +8,7 @@ Columns, order and number formats follow legacy_cols. Columns no topic carries a
 says.
 """
 import csv
+import math
 import shutil
 import statistics
 from collections import OrderedDict
@@ -73,7 +74,8 @@ def wall_minus_perf(states: Iterable, replies: Iterable) -> Optional[float]:
 
 def readout_rows(widths: Iterable, offset: Optional[float]):
     """(readout rows, readout_rows rows) from the Width messages of one camera. One frame per distinct stamp
-    (the readout publishes every row of a frame with the frame's stamp), numbered 1, 2, ... in stamp order."""
+    (the readout publishes every row of a frame with the frame's stamp), numbered 1, 2, ... in stamp order. s_tip is
+    the frame's Width.s_tip_mm (empty when NaN)."""
     frames: "OrderedDict[tuple, list]" = OrderedDict()
     for m in widths:
         frames.setdefault((m.stamp.sec, m.stamp.nanosec), []).append(m)
@@ -83,8 +85,8 @@ def readout_rows(widths: Iterable, offset: Optional[float]):
         used = [m for m in ms if m.valid]
         t = key[0] + key[1] * 1e-9
         w_med = statistics.median([float(m.width_mm) for m in used]) if used else None
-        ro.append([i, f6(t - offset) if offset is not None else "", "", "", "", int(ms[0].leg), "", "", len(used),
-                   fnd(w_med, 4)])
+        ro.append([i, f6(t - offset) if offset is not None else "", "", "", "", int(ms[0].leg),
+                   fnd(float(getattr(ms[0], "s_tip_mm", math.nan)), 3), "", len(used), fnd(w_med, 4)])
         rows.extend([i, round(float(m.d_mm), 2), round(float(m.s_mm), 3), round(float(m.width_mm), 4)] for m in used)
     return ro, rows
 

@@ -72,6 +72,7 @@
 - `int32 leg`
 - `float64 s_mm` (arc length along the leg)
 - `float64 d_mm` (distance behind the nozzle)
+- `float64 s_tip_mm` (nozzle position along the leg at the frame time, so `s_mm = s_tip_mm - d_mm`; NaN when the publisher does not know it. A message field cannot default to NaN, so publishers always set it.)
 - `float64 width_mm`
 - `bool valid`
 

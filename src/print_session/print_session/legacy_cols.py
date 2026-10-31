@@ -40,7 +40,6 @@ NOT_CARRIED = {
         "t_done_perf": "not carried: empty",
         "compute_ms": "not carried: empty",
         "skipped_total": "not carried: empty",
-        "s_tip": "not carried (Width has the row's s_dep, not the tip position): empty",
         "n_rows": "not carried (only used rows are published): empty",
         "_rows": "frames the readout gated out (no Width published) are not in the export",
     },

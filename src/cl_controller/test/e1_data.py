@@ -30,10 +30,15 @@ def load():
     return dict(rsi=rsi, ctrl=ctrl, ov=ov, readout=ro, rows=rows, bore1=b1)
 
 
-def readouts(d):
+def readouts(d, b1_s_dep_from_tip=False):
     """(push time, src, leg, s_tip, d, s, w) per readout, as the legacy threads pushed them to the row stores.
     ELP: readout_<ses>.csv frames with rows (readout_rows_<ses>.csv = the rows the controller stored), pushed at
-    t_done_perf. bore1: bore1_rt_<ses>.csv frames with pushed = 1, one row at d = 5 (s_dep, w), pushed at t_done."""
+    t_done_perf. bore1: bore1_rt_<ses>.csv frames with pushed = 1, one row at d = 5 (s_dep, w), pushed at t_done.
+
+    b1_s_dep_from_tip: bore1 s_dep = logged s_tip - 5 instead of the logged s_dep. The online bore1 thread computed
+    s_dep = s_tip - 5 from the unrounded s_tip and pushed that (legacy bore1_rt.py), so its row sat exactly on the
+    window edge s_tip - 5; both columns were then written with 3 decimals, and the logged s_dep is 1 ulp off the
+    logged s_tip - 5 on 334 of the 5092 rows."""
     from cl_controller.replay import Readout
     out = []
     ro = d["readout"]
@@ -48,7 +53,8 @@ def readouts(d):
     b1 = d["bore1"]
     b1 = b1[b1["pushed"] == 1]
     for t, leg, s_tip, s_dep, w in zip(b1["t_done"], b1["leg"], b1["s_tip"], b1["s_dep"], b1["w"]):
-        out.append(Readout(float(t), "bore1", int(leg), float(s_tip), np.array([5.0]), np.array([float(s_dep)]),
+        s = float(s_tip) - 5.0 if b1_s_dep_from_tip else float(s_dep)
+        out.append(Readout(float(t), "bore1", int(leg), float(s_tip), np.array([5.0]), np.array([s]),
                            np.array([float(w)])))
     return out
 

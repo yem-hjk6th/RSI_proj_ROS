@@ -8,7 +8,7 @@ invariants over a whole recorded session.
 
 | Module | ROS | Role |
 |---|---|---|
-| `session.py` | no | Loads a session folder (`data/e1_<ses>/`) as replay events: RSI packets, ELP and bore1 readouts, controller update times. Lock-step schedule (T2's golden merge), IPOC keying, `Width` row encoding. |
+| `session.py` | no | Loads a session folder (`data/e1_<ses>/`) as replay events: RSI packets, ELP and bore1 readouts, controller update times. Lock-step schedule (T2's golden merge), IPOC keying. |
 | `params.py` | no | Graph parameters from `config/e1.yaml`. The bridge takes its limits from the controller section and `ov_default` as the controller derives it. |
 | `recording_sim.py` | no | `krc_sim`'s `KrcSim` with a per-reply record (IPOC, OvCmd, RKorr). Motion, timing and Timeout logic are unchanged. |
 | `report.py` | no | Chain checks and the agreement report; linear-ramp check. |
@@ -19,7 +19,7 @@ invariants over a whole recorded session.
 - `KrcState` from `roboter/rsi_data_<ses>.csv.gz`. `path_speed_mm_s` and `v_eff_mm_s` come from `krc_rsi_bridge.path_speed`, as in the bridge.
 - `Width` on `/width/elp` from `roboter/readout_rows_<ses>.csv.gz` (frames with `n_used > 0`), pushed at `t_done_perf`.
 - `Width` on `/width/bore1` from `raw_video/bore1_rt_<ses>.csv.gz` rows with `pushed = 1` (d = 5 mm), pushed at `t_done`.
-- One `Width` per row. `s_mm` is the logged `s_dep` bit for bit. `d_mm` is chosen so that `s_mm + d_mm` (how `cl_controller` rebuilds the tip) gives the logged `s_tip`. It differs from the logged `d` by about 1e-14 mm; see `session.encode_rows`.
+- One `Width` per row, with the logged values bit for bit: `s_tip_mm` = the readout's `s_tip`, `s_mm` = the row's `s_dep`, `d_mm` = the row's `d` (bore1: 5 mm). `cl_controller` takes the tip from `s_tip_mm`, so it gets the logged `s_tip` exactly.
 - `lockstep`: per logged update, everything logged at or before it, then `/cl_controller/step`. It waits for that update's `OverrideCmd` before going on. `Width.stamp` is the logged push time.
 - `realtime`: `Width` only, keyed to the IPOC of each `KrcState` the bridge publishes. `Width.stamp` is the frame time on the live clock.
 

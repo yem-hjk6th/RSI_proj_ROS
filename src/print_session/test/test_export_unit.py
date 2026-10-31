@@ -42,8 +42,8 @@ def test_ctrl_row_empty_cells_and_rounding():
     assert (r["on_a"], r["forced"], r["valid_elp"], r["valid_b1"], r["hold_bed"]) == (1, 0, 1, "", 0)
 
 
-def _w(t, leg, d, s, w, ok=True):
-    return NS(stamp=_t(t), leg=leg, d_mm=d, s_mm=s, width_mm=w, valid=ok)
+def _w(t, leg, d, s, w, ok=True, s_tip=math.nan):
+    return NS(stamp=_t(t), leg=leg, d_mm=d, s_mm=s, s_tip_mm=s_tip, width_mm=w, valid=ok)
 
 
 def test_readout_frames_by_stamp():
@@ -51,6 +51,13 @@ def test_readout_frames_by_stamp():
     ro, rows = readout_rows(ws, offset=1.0)
     assert ro == [[1, "0.000000", "", "", "", 1, "", "", 0, ""], [2, "1.000000", "", "", "", 1, "", "", 2, 5.6]]
     assert rows == [[2, 12.5, 3.0, 5.5], [2, 13.0, 2.5, 5.7]]
+
+
+def test_readout_s_tip_from_width():
+    ws = [_w(2.0, 1, 12.5, 3.0, 5.5, s_tip=15.5), _w(2.0, 1, 13.0, 2.5, 5.7, s_tip=15.5),
+          _w(1.0, 1, math.nan, math.nan, math.nan, False, s_tip=9.05812)]
+    ro, _ = readout_rows(ws, offset=None)
+    assert [r[6] for r in ro] == [9.058, 15.5]          # run_cl._f(s_tip, 3); also on frames without a used row
 
 
 def test_export_writes_five_files(tmp_path):

@@ -123,6 +123,8 @@ def test_elp_node_reproduces_the_golden_rows(capsys):
             continue
         rows = gf[["d", "s_dep", "w"]].to_numpy(float)
         use = used_rows(rows)
+        s_tip = float(gf["s_tip"].iloc[0])
+        assert all(abs(m.s_tip_mm - s_tip) <= TOL_MM for m in msgs), f"frame {fr} s_tip"
         if not use.any():
             assert len(msgs) == 1 and not msgs[0].valid, f"frame {fr}"
             n_invalid += 1

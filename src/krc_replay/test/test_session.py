@@ -1,5 +1,5 @@
-"""Pure-Python checks of the replay core (no ROS): row encoding, the lock-step schedule, the node-layer conversion and
-the documented slice."""
+"""Pure-Python checks of the replay core (no ROS): the logged row values, the lock-step schedule, the node-layer
+conversion and the documented slice."""
 import math
 
 import numpy as np
@@ -16,22 +16,15 @@ def sess():
     return load(str(P.SESSION))
 
 
-def test_encode_rows_rebuilds_the_tip(sess):
-    from krc_replay.session import encode_rows
-    n = n_exact = n_logged_d = 0
-    max_dd = 0.0
+def test_readouts_carry_the_logged_values(sess):
+    """What log_player puts in each Width: the logged s_tip, s_dep and d, bit for bit (no rebuilding)."""
+    n = n_sum_off = 0
     for r in sess.readouts:
-        for (s, d), s_log, d_log in zip(encode_rows(r.s_tip, r.s), r.s, r.d):
-            n += 1
-            assert s == s_log                              # the binned position is sent bit for bit
-            tip = s + d
-            n_exact += int(tip == r.s_tip)
-            n_logged_d += int(s_log + d_log == r.s_tip)
-            assert abs(tip - r.s_tip) <= math.ulp(d)       # else as close as the ulp of d allows
-            max_dd = max(max_dd, abs(d - d_log))
+        assert len(r.d) == len(r.s) == len(r.w) > 0
+        n += len(r.s)
+        n_sum_off += int(sum(float(s) + float(d) != r.s_tip for s, d in zip(r.s, r.d)))
     assert n == 141476 + 5092
-    assert n - n_exact <= 700 and n_exact > n_logged_d    # E1: 623 rows have no exact d (small s_tip)
-    assert max_dd < 1e-12
+    assert n_sum_off > 0      # s_mm + d_mm is not the logged s_tip on these rows: the node must use s_tip_mm
 
 
 def test_lockstep_schedule_is_the_golden_merge(sess):
@@ -50,14 +43,15 @@ def test_lockstep_schedule_is_the_golden_merge(sess):
 
 
 def test_node_layer_conversion_reproduces_the_fixture(sess):
-    """What the lock-step node does with the messages (Time stamps, bridge v_eff, one row per Width, s_tip = s + d),
-    done without ROS: OvCmd and source equal the legacy fixture at all 1719 updates."""
+    """What the lock-step node does with the messages (Time stamps, bridge v_eff, one row per Width, tip from
+    s_tip_mm), done without ROS: OvCmd and source equal the legacy fixture at all 1719 updates."""
     import pandas as pd
     from cl_controller.controller import Controller
     from cl_controller.params import build_configs
     from cl_controller.pattern import load_pattern
     from krc_replay.params import controller_params, pattern_json
-    from krc_replay.session import encode_rows, sec_ns
+    from cl_controller.rowstore import tip_position
+    from krc_replay.session import sec_ns
     from krc_rsi_bridge.path_speed import PathSpeed
 
     def ts(t):
@@ -80,8 +74,8 @@ def test_node_layer_conversion_reproduces_the_fixture(sess):
                 ip += 1
             else:
                 r = ros[ir]
-                for (s, d), w in zip(encode_rows(r.s_tip, r.s), r.w):
-                    ctrl.push_rows(r.src, r.leg, s + d, [d], [s], [w], ts(r.t_push))
+                for d, s, w in zip(r.d, r.s, r.w):
+                    ctrl.push_rows(r.src, r.leg, tip_position(s, d, r.s_tip), [d], [s], [w], ts(r.t_push))
                 ir += 1
         ctrl.update(tu)
         out.append((ctrl.published_ov(), ctrl.source_label()))

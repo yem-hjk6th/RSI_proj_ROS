@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -35,34 +35,6 @@ class Readout:
     d: np.ndarray
     s: np.ndarray
     w: np.ndarray
-
-
-def encode_rows(s_tip: float, s: Sequence[float]) -> List[Tuple[float, float]]:
-    """(s_mm, d_mm) per row for a Width message, such that the controller node, which rebuilds the tip position as
-    s_mm + d_mm, gets the logged s_tip (the logged d is s_tip - s_dep up to rounding, so it is not needed).
-
-    s_mm is the logged s_dep, bit for bit (it is the position the row is binned at). d_mm is s_tip - s_dep, moved by
-    a few ulp so that s_mm + d_mm comes as close to s_tip as the ulp of d allows (equal to it except for some rows
-    with a small s_tip, whose ulp is finer than d's); it differs from the logged d by ~1e-14 mm. Sending the logged d
-    as is gives a tip 1 ulp off on many rows, which moves a row that sits exactly on the window edge
-    (s_dep = s_tip - d_min) in or out of the window: on E1 that changes the published OvCmd at update 625.
-    """
-    out = []
-    for ss in s:
-        ss = float(ss)
-        e0 = float(s_tip) - ss
-        best, err = e0, abs((ss + e0) - s_tip)
-        lo = hi = e0
-        for _ in range(8):
-            if err == 0.0:
-                break
-            lo, hi = math.nextafter(lo, -math.inf), math.nextafter(hi, math.inf)
-            for e in (lo, hi):
-                x = abs((ss + e) - s_tip)
-                if x < err:
-                    best, err = e, x
-        out.append((ss, best))
-    return out
 
 
 def sec_ns(t: float) -> Tuple[int, int]:
