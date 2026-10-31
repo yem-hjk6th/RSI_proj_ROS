@@ -1,0 +1,31 @@
+# Example parameters of the RSI bridge. Copy to a local file (config_local.* is git-ignored) and fill in the
+# placeholders. Network values below are placeholders, never real addresses.
+krc_rsi_bridge:
+  ros__parameters:
+    # --- network (RSI_EthernetConfig.xml on the controller: IP_NUMBER = this PC, PORT = port)
+    host: "<BRIDGE_LISTEN_IP>"        # address of the PC interface wired to the KR C4 (127.0.0.1 for krc_sim)
+    port: 59152
+    # --- pattern of the KRL program (print window, speed floor)
+    pattern_file: "<PATH_TO>/pattern_usr_ELP_R1v30_CLp_261022.json"
+    # --- override decision (legacy rsi_proc.py / rt_controller.CtrlCfg)
+    mode: "closed"                    # closed | shadow (reply without OvCmd) | step
+    ov_min: 1                         # outer limits; the effective ov_min is max(ov_min, speed floor)
+    ov_max: 100
+    v_min_mm_s: 3.4                   # speed floor: OvCmd >= ceil(v_min x 100 / v100 of the slowest print segment)
+    ov_outside: 100                   # outside the print window
+    ov_default: 40                    # lead-in, forced, watchdog target = round(v_start x 100 / V_max)
+    wd_s: 1.0                         # heartbeat (OverrideCmd.seq) older than this -> watchdog
+    fallback_ramp_s: 2.0              # forced / watchdog: linear ramp to ov_default over this time (0 = jump)
+    window_xy_tol: 1.5
+    z_tol: 0.5
+    window_ignore_z: false
+    step_seq: [50, 0, 100, 50, 28, 90, 50, 28, 90]
+    step_hold_s: 6.0
+    # --- reply process
+    deadline_s: 0.004                 # replies later than this after their packet count as late
+    rt_priority: 0                    # SCHED_FIFO priority of the reply process (needs rtprio rights); 0 = off
+    cpu: -1                           # pin the reply process to this CPU; -1 = off
+    ring_capacity: 8192
+    publish_period_s: 0.01            # KrcState publishing (all packets since the last tick)
+    tau_v: 0.28
+    k_chord: 25
