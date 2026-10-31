@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>krc_sim</name>
+  <version>0.1.0</version>
+  <description>Fake KUKA KR C4 RSI client: 4 ms packets, motion along a pattern at programmed speed x override, late-reply counting with the RSI Timeout, replay of recorded RSI logs.</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
