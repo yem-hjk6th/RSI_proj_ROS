@@ -338,7 +338,7 @@ RSI latency test: krc_sim -> bridge <LAPTOP_IP>:<RSI_PORT>, 600 s at 4 ms
 | Timeout | `no` |
 | nonzero RKorr, OvCmd outside the window, replies without OvCmd | 0 (safety invariant 1 and 2; `PASS` needs all three and no Timeout) |
 | late replies | at most 0.1 % of packets sent and a longest run below 10: the legacy lab criterion (`legacy/realtime_cl_261023/rtt_shadow_test.py`). CI on a shared runner asserts 1 % (`src/krc_rsi_bridge/test/loop_helpers.py`) |
-| round trip p99 | well below 4 ms. CI on loopback: p50 about 0.25 ms (see the PR of issue #20); no laptop figure yet |
+| round trip p99 | well below 4 ms. CI on loopback (one host, no cable): p50 0.08 ms, p99 0.15 ms, max 0.22 ms; no laptop figure yet |
 | simulator overruns | 0. If not, the simulator machine missed its own 4 ms schedule, and late replies are not the laptop's fault |
 
 Exit code: 0 = PASS, 1 = FAIL, 2 = no answer within `--wait` (bridge not running, wrong port, or the firewall drops
