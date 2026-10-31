@@ -1,0 +1,265 @@
+{
+  "session_ts": "20261022_165128",
+  "start_epoch": 1792702288.5922213,
+  "wait_for_rsi": true,
+  "src_name": "usr_ELP_R1v30_CLp_261022.src",
+  "ceiling_light": "on",
+  "borescope": {
+    "camera_indices": [
+      2
+    ],
+    "cameras": [
+      {
+        "camera_index": 2,
+        "tag": "",
+        "frames_csv": "borescope_frames_20261022_165128.csv",
+        "rig": {
+          "ts": "20261020_152800",
+          "dev_deg": null,
+          "target_deg": null,
+          "centreline_mm": 14.27,
+          "roll_mark": "pen line on a clear-tape band at the sleeve outer (back) face, 12 oclock notch (10-14). 10-20 user: top mark unchanged; bottom mark looks rolled a little (seen from below: turned left, maybe CW), not sure -> checked by the A2b bore1 drift check",
+          "note": "CAGE1012 PETG. Centreline 14.27 by caliper 10-20 (user; 10-14 14.25, same within caliper repeatability 0.2-0.3). Photo data/photos/20261020/bore1_cage_from_below_user.png. Hand entry by laptop CC.",
+          "snapshot": null
+        }
+      }
+    ],
+    "backend": "CAP_DSHOW",
+    "resolution": [
+      1280,
+      720
+    ],
+    "fps_nominal": 30.0,
+    "fourcc": "mp4v",
+    "segment_minutes": 15,
+    "camera_index": 2
+  },
+  "rsi": {
+    "host": "0.0.0.0",
+    "port": 59152,
+    "disconnect_timeout_s": 2.0
+  },
+  "elp": {
+    "name": "Global Shutter Camera",
+    "instance_match": "7&325db0ba",
+    "usb_instance": "7&325db0ba&0&0000",
+    "camera_index": 1,
+    "backend": "CAP_DSHOW",
+    "fourcc_in": "MJPG",
+    "resolution": [
+      1920,
+      1200
+    ],
+    "fps_requested": 60,
+    "fourcc": "MJPG",
+    "jpeg_quality": 95,
+    "segment_minutes": 1.0,
+    "controls": {
+      "CAP_PROP_AUTO_EXPOSURE": 0.25,
+      "CAP_PROP_EXPOSURE": -7,
+      "CAP_PROP_GAIN": 0,
+      "CAP_PROP_AUTO_WB": 0,
+      "WB_KELVIN": 4600
+    },
+    "stored": "raw sensor orientation",
+    "rot180": false,
+    "frames_csv": "elp_frames_20261022_165128.csv",
+    "readback": {
+      "CAP_PROP_AUTO_EXPOSURE": -1.0,
+      "CAP_PROP_EXPOSURE": -7.0,
+      "CAP_PROP_GAIN": 0.0,
+      "CAP_PROP_AUTO_WB": 0.0,
+      "WB_KELVIN": 4600.0
+    },
+    "measured": {
+      "frames_read": 33733,
+      "frames_written": 33733,
+      "frames_dropped_queue": 0,
+      "read_fails": 0,
+      "segments": 8,
+      "duration_s": 430.277,
+      "fps_measured": 78.4,
+      "fps_at_open": 76.67
+    }
+  },
+  "realtime": {
+    "mode": "closed",
+    "cfg": {
+      "w12_t": 5.25,
+      "v_ref_mm_s": 12.0,
+      "alpha_m": 0.72,
+      "tau_v": 0.28,
+      "t_u": 0.25,
+      "t_f": 0.25,
+      "win_mm": 3.0,
+      "b1_win_mm": 1.5,
+      "s_use": 15.0,
+      "d_min": 12.0,
+      "b1_d": 5.0,
+      "bin_mm": 0.5,
+      "slow_from": 2,
+      "ov_base": 40.0,
+      "ov_min": 12,
+      "ov_max": 100,
+      "ov_outside": 100,
+      "ov_default": 40,
+      "v_max_mm_s": 30.0,
+      "v_min_mm_s": 3.4,
+      "ov_floor": 12,
+      "fallback_ramp_s": 2.0,
+      "wd_s": 1.0,
+      "ring_fresh_s": 0.2,
+      "wd_s_min": 27.0,
+      "wd_s_max": 168.0,
+      "z_tol": 0.5,
+      "window_ignore_z": false,
+      "window_xy_tol": 1.5,
+      "step_seq": [
+        50,
+        0,
+        100,
+        50,
+        28,
+        90,
+        50,
+        28,
+        90
+      ],
+      "step_hold_s": 6.0,
+      "speed_check": "latch",
+      "speed_tol": 0.15,
+      "speed_legs": 2
+    },
+    "rig": "<HOME>\\Desktop\\rsi_printing\\Y4F\\pipeline\\realtime_cl_261022\\rig\\rig_cage1012.json",
+    "pattern": "pattern\\pattern_usr_ELP_R1v30_CLp_261022.json",
+    "version": "v3 realtime_cl_261022",
+    "law": {
+      "plan": "A_b1",
+      "primary": "",
+      "target": "const",
+      "ff_lead_s": 0.08,
+      "ff_blend_lo": 4.0,
+      "ff_blend_hi": 2.0,
+      "integ": "gated",
+      "n0": 3.0,
+      "g_min": 0.02,
+      "step_n": 3,
+      "step_thr": 0.15,
+      "n_after_step": 1.0,
+      "gain_elp": 1.0,
+      "gain_bore1": 1.0,
+      "db": 0.02,
+      "rate_max": 0.4,
+      "ack": false,
+      "act_mm": 1.0,
+      "tau_slow": 20.0,
+      "t_u": 0.25,
+      "u0": 0.0,
+      "slow_from": 2,
+      "blind_mix": 1.0,
+      "start_mix": 1.0,
+      "tau_model": 0.0,
+      "s_head": 32.0,
+      "nb_min": 3,
+      "age_max_elp": 0.2,
+      "age_max_bore1": 0.3,
+      "lag_max_elp": 4.0,
+      "lag_max_bore1": 2.0,
+      "vstar_lo_mm_s": 1.6240233988393524,
+      "vstar_hi_mm_s": 32.61938194150854,
+      "jump_max": 0.3,
+      "n_on": 4,
+      "n_off": 2,
+      "L_A": 175.0,
+      "freeze_start": 3.0,
+      "freeze_end": 4.0,
+      "s_end_excl": 6.0,
+      "force_seg": {},
+      "guard_bed": true,
+      "nobed_s": 1.0,
+      "tgt_schedule": "const",
+      "tgt_seq": [
+        4.75,
+        5.25,
+        5.75,
+        5.25,
+        4.75,
+        5.25,
+        5.75,
+        5.25
+      ],
+      "s_tgt_switch": 87.5,
+      "w_base": 5.25,
+      "alpha_m": 0.72,
+      "v_start_mm_s": 12.0,
+      "ol_sched_mm_s": [],
+      "v_ref_mm_s": 12.0
+    },
+    "order": [
+      "bore1",
+      "elp"
+    ],
+    "speed": {
+      "v_max_mm_s": 30.0,
+      "v100_min_mm_s": 30.0,
+      "constant_speed": true,
+      "ov_ref": 40.0,
+      "v_from": "segs column v100_mm_s",
+      "ov_base_rule": 40.0,
+      "ov_base": 40.0,
+      "ov_base_given": null,
+      "v_start_mm_s": 12.0,
+      "ov_default": 40,
+      "src": "usr_ELP_R1v30_CLp_261022",
+      "v_min_mm_s": 3.4,
+      "ov_floor": 12,
+      "ov_min_outer": 1,
+      "ov_min": 12,
+      "target_ovcmd_m1_1p5": [
+        "W 5.25: OvCmd 40-60 (12.0-18.0 mm/s)"
+      ],
+      "target_unreachable": []
+    }
+  },
+  "bore1_shadow": {
+    "frames": 12878,
+    "skipped": 52,
+    "predicted": 5382,
+    "pushed": 5092,
+    "errors": 0,
+    "ms_mean": 9.507349330406887,
+    "ms_p95": 13.250214961590245,
+    "ms_max": 47.94740001671016,
+    "shadow_rows": 1684,
+    "shadow_errors": 0,
+    "elp_rows_seen": 11962
+  },
+  "v3_summary": {
+    "speed_check": [
+      {
+        "leg": 1,
+        "ratios": {
+          "12@s15": 0.9873011271674277,
+          "12@s55": 0.983422484467976,
+          "12@s95": 0.9873162123869648,
+          "12@s135": 0.9908160854439259
+        },
+        "ok": true
+      },
+      {
+        "leg": 2,
+        "ratios": {
+          "12@s15": 0.9802239040201979,
+          "12@s55": 0.9801614398262033,
+          "12@s95": 0.9864096658464327,
+          "12@s135": 0.988950883373585
+        },
+        "ok": true
+      }
+    ],
+    "speed_alarm": false,
+    "n_corr": 240,
+    "n_switch": 10,
+    "n_updates": 1719
+  }
+}

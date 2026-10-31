@@ -1,0 +1,16 @@
+3c8449bcc17e4e4de625c696bc94024f  4654  bench_latency.py
+6381f5411d77df8fc463e1e2ab18d34b  7510  bore1_head.py
+36dfddc21645caa8cd7c9b995d4f1801  24360  bore1_rt.py
+1af3bd57a1e6e68875787d49b25a65de  277  fusion_params.json
+070d543cc4e5a1e5ea93d9f1ca2d5378  3121  make_quality_limits.py
+b784a80487b988b0c960bf44f935e771  203  quality_limits.json
+067b93e270626ac499685330190527fa  2264  quality_limits_report.json
+e800ef169b93008270b50a66a7e0a333  1244  README_rt_bore1.md
+6e80ca7734f0ce7eac658f3716efeca2  784  requirements_bore1.txt
+1e012e616b3f64e49548de7ee04fe774  1125  weights/cnxt_t_deploy_s0.json
+083e1eeba70aae5d0d2cac809f1445fb  111341487  weights/cnxt_t_deploy_s0.pt
+b3ec1e0f595779e8d91814ded445c07c  1125  weights/cnxt_t_deploy_s1.json
+0548e59f81c059e69252c86ae1cea8c3  111341487  weights/cnxt_t_deploy_s1.pt
+5c159074acf1fbe18493bf4d36bdea66  1125  weights/cnxt_t_deploy_s2.json
+1dc38930f6e979e2fe836ebcd635cdbb  111341487  weights/cnxt_t_deploy_s2.pt
+fe4b87b98ecf5d2124ae93980eef57aa  296  weights/weights_sha256.json

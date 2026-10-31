@@ -1,0 +1,319 @@
+&ACCESS RVP
+&REL 1
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF usr_ELP_R1v30_CLp_261022 ( )
+;==========================================================================
+; usr_ELP_R1v30_CLp_261022 v2 - <HOST> 5080, 2026-10-22. AFTER REVIEW_src_261022. NOT RUN ON HARDWARE.
+; SOURCE: usr_ELP_R1v12_CL_261021.src (CL12, printed 10-21). Every PTP / LIN target (coordinates,
+;   orientation, S, order) and every C_DIS = CL12 verbatim; tool 3, base 0, $ADVANCE 3, home,
+;   descent / wipe-in / wipe-out 0.012, travel 0.03 and the RSI_CREATE / RSI_ON order unchanged.
+;   v2 (REVIEW_src_261022 sec. 5.2): L73 RPM before RSI 120 -> 0, screw stopped until the purge.
+; WHY (user 2026-10-22): same trajectory -> no air run; purge inside the src at an off-bed point
+;   (400 rpm for 5-10 s, then back to the print rpm before recording); print legs up to 30 mm/s.
+; DIFFERENCES vs CL12 (only these; line numbers = this file):
+;   1) DEF name, this header (L5-L49) and L72-L73: RPM before RSI 120 -> 0 (v2).
+;   2) PURGE AT THE HOVER (L87-L94). L87 hover PTP: same target, C_PTP removed. L89 WAIT SEC 0,
+;      L91 PelletExtruderRPM = 400, L92 WAIT SEC 7, L94 PelletExtruderRPM = 120, then the CL12
+;      descent / wipe-in. Why: plain assignments run in the advance run ($ADVANCE 3: up to 3
+;      motions ahead), so without a stop 400 would start while the robot still travels. WAIT
+;      SEC 0 holds the interpreter until the hover PTP has finished (robot at rest). That stop
+;      also makes C_PTP impossible (exact stop either way); removing C_PTP writes the exact stop
+;      into the code. WAIT SEC 7 is itself an advance-run stop: 120 is set when the 7 s end.
+;      400 rpm: inside the 10-14 flow test (motor 388-392 rpm); 7 s: middle of user's 5-10 s.
+;      Hover X 1025 = 7 mm past the bed's +X edge (X 1018): the purge drops off the bed.
+;   3) PRINT-SECTION SPEED (L99-L301): one $VEL.CP right before EVERY print LIN (57 changed,
+;      35 inserted, 9 unchanged). Straight print segments (segs csv kind A: r6-r24, lead,
+;      p1-p4; kind B: +X lines) 0.024 -> 0.030 = 30 mm/s at override 100. Connectors (+Y at
+;      X 945) and hops (+Y at X 770) stay 0.024 = 24 mm/s at override 100, the fastest run on
+;      this path (10-21 360 rpm print). LIN -> segs row: CHANGES_src_261022.md.
+; PC (run_cl.py, not changed here): mm/s per override % is now 0.30 on kind A / B and 0.24 on
+;   connectors / hops (CL12: 0.24 everywhere). Any PC value built on 0.24 (step_check speed
+;   ratios, 12 mm/s at OvCmd 50) needs the new scale.
+; ROUTE: RSI only. The PC sends OvCmd in EVERY reply; RSI_OV4.rsi runs ETHERNET1 Out7 ->
+;   LIMIT1 (1..100) -> MAP2OV_PRO1 -> $OV_PRO. No interrupt, TRIGGER or $SEN_PREA logic here.
+;   Needs RSI_OV4.rsi + RSI_OV4.rsi.xml + RSI_OV4.rsi.diagram and RSI_EthernetConfig_OV4.xml in
+;   C:\KRC\ROBOTER\Config\User\Common\SensorInterface\ (on the KRC since 10-20).
+; RSI IS ON DURING THE 7 s PURGE: the PC must keep answering; the ETHERNET Timeout (100 cycles
+;   = 0.4 s) stops the robot as before (10-19 A6: about 0.42 s, KSS00489). rpm_ext reads 400.
+; EXTRUDER AND STOP: sps.sub L89-109 outputs 0 while $PRO_ACT is FALSE and the last rpm on
+;   resume (not verified for a STOP inside WAIT SEC). CANCEL ends the extrusion.
+; PC window 1..100 (user 10-21): the pendant must read 100 in the first 2 s after Start; a reply
+;   without OvCmd (wrong recorder) gives 1 % -> STOP. NOT FOR THE OPEN-LOOP RECORDER (it
+;   replies 100 -> 30 mm/s on every print leg).
+; THE PENDANT OVERRIDE SLIDER IS OVERWRITTEN EVERY 4 ms FROM RSI_ON TO RSI_OFF.
+;   Slow down by STOP. After a CANCEL or RSI error stop $OV_PRO stays at the last PC value:
+;   check the POV indicator.
+; NO AIR RUN (user 2026-10-22). Only geometric difference to CL12: the robot reaches the hover
+;   point itself (exact stop, in the air, off the bed) instead of blending into the descent.
+;==========================================================================
+;VARIABLE DECLARATIONS (moved here from the .dat, laptop 10-19; copy the .src only)
+DECL INT OV_SAVED
+DECL INT ret
+DECL INT CONTID
+
+;FOLD INI
+BAS (#INITMOV,0 )
+;BASE IS 0, TOOL IS 3, FIXED START POS
+BAS(#TOOL, 3)
+BAS(#BASE, 0)
+BAS(#VEL_PTP, 10)
+PDAT_ACT.ACC = 50
+PDAT_ACT.APO_DIST = 50
+$BWDSTART = TRUE
+$VEL.CP=0.2
+$ADVANCE=3
+;ENDFOLD (INI)
+
+OV_SAVED=$OV_PRO
+
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+;EXTRUDER STOPPED UNTIL THE HOVER PURGE (v2, REVIEW 5.2): NO SCREW OUTPUT OVER THE BED
+PelletExtruderRPM = 0
+
+;RSI INI
+ret = RSI_CREATE("RSI_OV4.rsi", CONTID, TRUE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+ret = RSI_ON(#RELATIVE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+;PURGE HOVER PAST THE BED'S MAX X, DESCEND OUTSIDE BED, WIPE IN ALONG -X TO THE FIRST LEG
+PTP {X 1025.0, Y -530.0, Z 60, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0, S 'B110'}
+;PURGE (user 10-22). WAIT SEC 0 = ADVANCE-RUN STOP: THE RPM CHANGES ONLY WITH THE ROBOT AT REST HERE
+WAIT SEC 0
+;400 RPM FOR 7 s, 7 mm PAST THE BED'S +X EDGE; WAIT SEC 7 IS ALSO AN ADVANCE-RUN STOP
+PelletExtruderRPM = 400
+WAIT SEC 7
+;BACK TO THE PRINT RPM BEFORE THE DESCENT (DESCENT + WIPE-IN ABOUT 11 s BEFORE THE PC WINDOW AT X 946.5)
+PelletExtruderRPM = 120
+$VEL.CP=0.012
+LIN {X 1025.0, Y -530.0, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -530.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+
+;LAYER 1, R1v PATH, CL12 TARGETS: ONE $VEL.CP BEFORE EVERY PRINT LIN. KIND A / B 0.030 (30 mm/s AT OVERRIDE 100), CONNECTOR / HOP 0.024
+$VEL.CP=0.030
+LIN {X 935.8, Y -530.0, Z 2.16, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 926.6, Y -530.0, Z 2.12, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 917.4, Y -530.0, Z 2.09, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 908.2, Y -530.0, Z 2.05, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 898.9, Y -530.0, Z 2.01, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 889.7, Y -530.0, Z 1.97, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 880.5, Y -530.0, Z 1.94, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 871.3, Y -530.0, Z 1.90, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 862.1, Y -530.0, Z 1.86, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 852.9, Y -530.0, Z 1.83, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 843.7, Y -530.0, Z 1.79, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 834.5, Y -530.0, Z 1.75, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 825.3, Y -530.0, Z 1.71, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 816.1, Y -530.0, Z 1.68, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 806.8, Y -530.0, Z 1.64, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 797.6, Y -530.0, Z 1.60, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 788.4, Y -530.0, Z 1.56, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 779.2, Y -530.0, Z 1.53, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -530.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -515.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -515.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -500.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -500.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -500.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -500.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -500.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -500.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -491.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -491.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -476.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -476.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -476.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -476.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -476.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -476.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -467.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -467.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -452.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -452.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -452.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -452.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -452.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -452.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -443.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -443.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -428.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -428.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -428.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -428.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -428.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -428.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -419.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -419.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -404.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -404.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -404.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -404.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -404.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -404.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -395.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -395.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -380.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -380.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -380.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -380.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -380.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -380.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -371.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -371.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -356.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -356.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -356.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -356.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -356.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -356.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -347.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -347.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -332.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -332.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -332.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -332.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -332.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -332.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -323.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -323.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -308.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -308.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -308.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -308.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -308.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -308.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -299.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -299.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 945.0, Y -284.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 930.0, Y -284.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 890.0, Y -284.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 850.0, Y -284.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 810.0, Y -284.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 770.0, Y -284.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.024
+LIN {X 770.0, Y -275.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.030
+LIN {X 945.0, Y -275.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0}
+
+;ADVANCE STOP: RSI_OFF ONLY AFTER THE LAST LEG, THEN RESTORE THE PENDANT OVERRIDE (RSI_OFF DOES NOT)
+WAIT SEC 0
+ret = RSI_OFF()
+$OV_PRO=OV_SAVED
+
+;EXTRUDER OFF BEFORE THE TRAVEL
+PelletExtruderRPM = 0
+
+;WIPE OUT ALONG +X PAST THE BED'S MAX X (MIRROR OF THE WIPE-IN), LIFT 60, TRAVEL AT Z + 60 TO THE 10-06 END POSE, HOME
+$VEL.CP=0.012
+LIN {X 1025.0, Y -275.0, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 1025.0, Y -275.0, Z 62.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.03
+LIN {X 847.5, Y -530.0, Z 61.80, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+END

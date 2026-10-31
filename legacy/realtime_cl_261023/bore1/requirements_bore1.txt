@@ -1,0 +1,8 @@
+# bore1 head on top of the recorder env (laptop: zedenv). Tested on the 5080 with the versions in brackets.
+# torch MUST be a CUDA build; RTX 50 series (sm_120) needs the cu128 wheels:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+torch>=2.7          # [2.11.0+cu128]
+timm>=1.0.20        # [1.0.26]  needs the model name convnext_tiny.dinov3_lvd1689m (weights are loaded from the .pt, pretrained=False, no download)
+opencv-python       # [4.13.0]  already in the recorder env
+numpy               # [2.4.4]   already in the recorder env
+# check: python -c "import torch, timm; print(torch.__version__, torch.cuda.is_available(), timm.__version__); import timm; timm.create_model('convnext_tiny.dinov3_lvd1689m', pretrained=False, num_classes=1)"

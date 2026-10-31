@@ -1,0 +1,352 @@
+{
+ "session": "20261022_165128",
+ "plan": "A_b1",
+ "order": [
+  "bore1",
+  "elp"
+ ],
+ "judged_source": "bore1",
+ "W_star": 5.25,
+ "pattern": "pattern\\pattern_usr_ELP_R1v30_CLp_261022.json",
+ "bins": {
+  "elp": 2950,
+  "bore1": 2910
+ },
+ "drop_legs": [
+  8
+ ],
+ "leg_mean_rhat": {
+  "1": -0.009,
+  "2": -0.148,
+  "3": 0.095,
+  "4": 0.019,
+  "5": -0.258,
+  "6": 0.049,
+  "7": 0.089,
+  "8": -0.592,
+  "9": -0.251,
+  "10": -0.149
+ },
+ "target_schedule": {
+  "schedule": "const",
+  "n_bins_transient_excluded": 0,
+  "leg_mean_W_t": {
+   "1": [
+    5.25
+   ],
+   "2": [
+    5.25
+   ],
+   "3": [
+    5.25
+   ],
+   "4": [
+    5.25
+   ],
+   "5": [
+    5.25
+   ],
+   "6": [
+    5.25
+   ],
+   "7": [
+    5.25
+   ],
+   "8": [
+    5.25
+   ],
+   "9": [
+    5.25
+   ],
+   "10": [
+    5.25
+   ]
+  }
+ },
+ "within_sd": 0.05923351828995639,
+ "leg_sd": 0.020598096432855262,
+ "b_u": -0.26289348841303123,
+ "within_sd_openloop_veff": 0.05883664442695875,
+ "within_sd_openloop_hypo_u": 0.07315138365165538,
+ "mean_res": 0.003913480481350029,
+ "leg_mean_res": {
+  "1": -0.0042,
+  "2": -0.0017,
+  "3": 0.0096,
+  "4": 0.0022,
+  "5": -0.0358,
+  "6": 0.0333,
+  "7": 0.0021,
+  "8": -0.0372,
+  "9": 0.0318,
+  "10": -0.0021
+ },
+ "ceil_share": 0.0,
+ "floor_share_nondrop": 0.0,
+ "share_primary": 1.0,
+ "share_model": 0.0,
+ "share_primary_len": 1.0,
+ "share_model_len": 0.0,
+ "w_target_log_check": {
+  "rows": 672,
+  "agree": 672
+ },
+ "share_lost": 0.0,
+ "max_switch_per_leg": 1,
+ "primary_invalid_share": 0.0072992700729927005,
+ "elp_rows_age_s32": {
+  "p999": 0.02145300000000009,
+  "max": 0.022,
+  "share_over_age_max": 0.0
+ },
+ "median_abs_du_corr": 0.031810000000000005,
+ "secondary_invalid_share": 0.0,
+ "primary_invalid_why": {
+  "nb": 3,
+  "age": 1
+ },
+ "elp_nobed_max_s": 0.0,
+ "src_agree": {
+  "n": 544,
+  "median": 0.037820000000000006,
+  "p90": 0.09841799999999999,
+  "from_": "ctrl"
+ },
+ "speed_check_online": [
+  {
+   "leg": 1,
+   "ratios": {
+    "12@s15": 0.9873011271674277,
+    "12@s55": 0.983422484467976,
+    "12@s95": 0.9873162123869648,
+    "12@s135": 0.9908160854439259
+   },
+   "ok": true
+  },
+  {
+   "leg": 2,
+   "ratios": {
+    "12@s15": 0.9802239040201979,
+    "12@s55": 0.9801614398262033,
+    "12@s95": 0.9864096658464327,
+    "12@s135": 0.988950883373585
+   },
+   "ok": true
+  }
+ ],
+ "speed_check_offline": [
+  {
+   "leg": 1,
+   "v_prog": 12.0,
+   "s0": 0.0,
+   "ratio": 1.0
+  },
+  {
+   "leg": 1,
+   "v_prog": 12.0,
+   "s0": 15.0,
+   "ratio": 1.008
+  },
+  {
+   "leg": 1,
+   "v_prog": 12.0,
+   "s0": 55.0,
+   "ratio": 0.996
+  },
+  {
+   "leg": 1,
+   "v_prog": 12.0,
+   "s0": 95.0,
+   "ratio": 0.996
+  },
+  {
+   "leg": 1,
+   "v_prog": 12.0,
+   "s0": 135.0,
+   "ratio": 1.0
+  },
+  {
+   "leg": 2,
+   "v_prog": 12.0,
+   "s0": 0.0,
+   "ratio": 0.995
+  },
+  {
+   "leg": 2,
+   "v_prog": 12.0,
+   "s0": 15.0,
+   "ratio": 1.006
+  },
+  {
+   "leg": 2,
+   "v_prog": 12.0,
+   "s0": 55.0,
+   "ratio": 1.005
+  },
+  {
+   "leg": 2,
+   "v_prog": 12.0,
+   "s0": 95.0,
+   "ratio": 0.995
+  },
+  {
+   "leg": 2,
+   "v_prog": 12.0,
+   "s0": 135.0,
+   "ratio": 1.0
+  }
+ ],
+ "override_not_following_share": 0.0,
+ "watchdog_fallback_share": 0.0,
+ "delay_max": 0.0,
+ "delay_increase_steps": 0,
+ "b_elp": 0.13060000000000027,
+ "b_bore1": 0.1392500000000001,
+ "caliper_points": [
+  {
+   "id": "1-1",
+   "leg": 1,
+   "s": 35.0,
+   "cal": 5.24,
+   "elp": 5.3304,
+   "bore1": 5.2348,
+   "W_t": 5.25,
+   "r": 0.1293
+  },
+  {
+   "id": "2-3",
+   "leg": 2,
+   "s": 115.0,
+   "cal": 5.24,
+   "elp": 5.2313,
+   "bore1": 5.1822,
+   "W_t": 5.25,
+   "r": 0.1293
+  },
+  {
+   "id": "3-4",
+   "leg": 3,
+   "s": 155.0,
+   "cal": 5.18,
+   "elp": 5.3147,
+   "bore1": 5.2492,
+   "W_t": 5.25,
+   "r": 0.0693
+  },
+  {
+   "id": "4-4",
+   "leg": 4,
+   "s": 155.0,
+   "cal": 5.01,
+   "elp": 5.255,
+   "bore1": 5.2142,
+   "W_t": 5.25,
+   "r": -0.1007
+  },
+  {
+   "id": "5-2",
+   "leg": 5,
+   "s": 75.0,
+   "cal": 4.8,
+   "elp": 5.0178,
+   "bore1": 4.9857,
+   "W_t": 5.25,
+   "r": -0.3108
+  },
+  {
+   "id": "6-3",
+   "leg": 6,
+   "s": 115.0,
+   "cal": 5.05,
+   "elp": 5.1765,
+   "bore1": 5.1771,
+   "W_t": 5.25,
+   "r": -0.0608
+  },
+  {
+   "id": "7-2",
+   "leg": 7,
+   "s": 75.0,
+   "cal": 4.89,
+   "elp": 5.0683,
+   "bore1": 5.0835,
+   "W_t": 5.25,
+   "r": -0.2208
+  },
+  {
+   "id": "8-4",
+   "leg": 8,
+   "s": 155.0,
+   "cal": 5.51,
+   "elp": 5.605,
+   "bore1": 5.638,
+   "W_t": 5.25,
+   "r": 0.3993
+  },
+  {
+   "id": "9-4",
+   "leg": 9,
+   "s": 155.0,
+   "cal": 5.11,
+   "elp": 5.3219,
+   "bore1": 5.3286,
+   "W_t": 5.25,
+   "r": -0.0008
+  },
+  {
+   "id": "10-1",
+   "leg": 10,
+   "s": 35.0,
+   "cal": 5.12,
+   "elp": 5.2154,
+   "bore1": 5.2705,
+   "W_t": 5.25,
+   "r": 0.0092
+  }
+ ],
+ "caliper_share_in_T": 0.5555555555555556,
+ "states_weight": "length",
+ "thresholds": {
+  "within": 0.08,
+  "leg": 0.025,
+  "loop_within_minus_openloop_veff": 0.035
+ },
+ "verdict": {
+  "1_within_leg": true,
+  "2_leg_to_leg": true,
+  "4_ceiling": true,
+  "4p_floor_nondrop": true,
+  "5_states": true,
+  "6_speed_check": true
+ },
+ "success": true,
+ "class": {
+  "rsi_link": {
+   "speed_check": false,
+   "override_not_following": false,
+   "watchdog_fallback": false,
+   "delay": false
+  },
+  "signal_source": {
+   "primary_invalid": false,
+   "lost": false,
+   "no_bore1": false,
+   "disagree": false
+  },
+  "source_blame": false,
+  "both_degraded": false,
+  "sources_agree": true,
+  "process": {
+   "drop_legs": true,
+   "ceiling_bound": false,
+   "floor_bound": false,
+   "bead_off_bed": false
+  },
+  "process_fault": false,
+  "loop": {}
+ },
+ "branch": "pass",
+ "next_print": "A",
+ "next_why": "all judged criteria passed: next plan in the order",
+ "note_sec8": "Note: this suggestion ignores earlier prints. If A_b1 failed today and this A print passed, the next print is A again, not B (B only after both A_b1 and A passed); after a B' / B'' print that passes, go back to the first unprinted plan of the original order. See INTERFACE sec. 8."
+}

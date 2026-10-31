@@ -1,0 +1,28 @@
+<ROOT>
+   <CONFIG>
+      <IP_NUMBER><PC_IP></IP_NUMBER>
+      <PORT>59152</PORT>      
+      <SENTYPE>ImFree</SENTYPE>    
+      <ONLYSEND>FALSE</ONLYSEND>
+   </CONFIG>
+<SEND>
+      <ELEMENTS>
+         <ELEMENT TAG="DEF_RIst" TYPE="DOUBLE" INDX="INTERNAL" />
+         <ELEMENT TAG="DEF_RSol" TYPE="DOUBLE" INDX="INTERNAL" />
+         <ELEMENT TAG="DEF_Delay" TYPE="LONG" INDX="INTERNAL" />
+         <ELEMENT TAG="Override" TYPE="LONG" INDX="1" />
+         <ELEMENT TAG="Vel_Act" TYPE="LONG" INDX="2" />
+         <ELEMENT TAG="RPM_Ext" TYPE="LONG" INDX="3" />
+      </ELEMENTS>
+   </SEND>
+<RECEIVE>
+      <ELEMENTS>
+         <ELEMENT TAG="RKorr.X" TYPE="DOUBLE" INDX="1" HOLDON="1" />
+         <ELEMENT TAG="RKorr.Y" TYPE="DOUBLE" INDX="2" HOLDON="1" />
+         <ELEMENT TAG="RKorr.Z" TYPE="DOUBLE" INDX="3" HOLDON="1" />
+         <ELEMENT TAG="RKorr.A" TYPE="DOUBLE" INDX="4" HOLDON="1" />
+         <ELEMENT TAG="RKorr.B" TYPE="DOUBLE" INDX="5" HOLDON="1" />
+         <ELEMENT TAG="RKorr.C" TYPE="DOUBLE" INDX="6" HOLDON="1" />
+      </ELEMENTS>
+   </RECEIVE>
+</ROOT>

@@ -1,0 +1,21 @@
+{
+  "_comment": "line N 261021: = pattern_usr_ELP_R1v_261016.json (same geometry, z_cmd, window) with segs of usr_ELP_R1v12_CL_261021 (v_mm_s = speed at override 50 = 12 everywhere in the print section)",
+  "src": "usr_ELP_R1v12_CL_261021",
+  "segs": "usr_ELP_R1v12_CL_261021_segs.csv",
+  "z_cmd": {
+    "x0_z0": [
+      600.0,
+      0.8
+    ],
+    "x1_z1": [
+      970.0,
+      2.3
+    ]
+  },
+  "x_start": 945.0,
+  "x_window": [
+    765.0,
+    950.0
+  ],
+  "min_s_tip": 9.0
+}
