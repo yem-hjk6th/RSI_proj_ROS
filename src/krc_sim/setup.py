@@ -15,6 +15,7 @@ setup(
         ("share/" + package_name + "/patterns", glob("patterns/*")),
     ],
     install_requires=["setuptools"],
+    tests_require=["pytest"],
     zip_safe=True,
     maintainer="yem-hjk6th",
     maintainer_email="183082151+yem-hjk6th@users.noreply.github.com",
