@@ -1,0 +1,13 @@
+# Example parameters for the width_readout_elp node. Empty rig_json / pattern_json = the packaged copies of the
+# legacy rig (CAGE1012) and the R1v30_CLp pattern.
+width_readout_elp:
+  ros__parameters:
+    camera: elp
+    image_topic: /elp/image_raw
+    state_topic: /krc/state
+    width_topic: /width/elp
+    rig_json: ""
+    pattern_json: ""
+    root: ""
+    d_min: 12.0
+    use_header_stamp: true

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>width_readout_elp</name>
+  <version>0.1.0</version>
+  <description>ELP chroma-edge bead-width readout: image + KrcState -> Width (port of the legacy rt_readout).</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>krc_interfaces</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-pandas</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <!-- the legacy readout (golden and differential tests) needs SciPy; the port does not -->
+  <test_depend>python3-scipy</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
