@@ -1,0 +1,11 @@
+{
+  "_comment": "Vendored copy of 1015/desktop_5080/r1_first/rig_cage1012.json (CAGE1012 v4, ELP unit A, square 12.02). Paths are relative to this folder. intrinsics.json and hand_eye.json are reduced copies (only the keys the readout reads: K, dist / T_tool_cam, T_base_board). The occlusion mask PNG is a binary and is NOT in this folder: copy 1015/desktop_5080/r1_first/occlusion_mask_cage1012.png here (README_realtime.md step 1).",
+  "intrinsics": "intrinsics.json",
+  "hand_eye": "hand_eye.json",
+  "paper_mm": 0.1,
+  "lat_s": 0.057,
+  "tool_abc": [0, 90, 0],
+  "u_max": null,
+  "mask": "occlusion_mask_cage1012.png",
+  "image_wh": [1920, 1200]
+}
