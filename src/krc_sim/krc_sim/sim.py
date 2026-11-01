@@ -5,7 +5,7 @@ before the next packet goes out (at least one period after the packet was actual
 simulator's own scheduling jitter is not blamed on the PC). A reply that has not arrived by then is late (a reply that comes
 later carries an old IPOC and is discarded as a mismatch). The late counter counts consecutive late
 replies and is reset by an on-time reply; when it reaches ``timeout_packets`` (the ETHERNET object's
-Timeout, 100 in ``legacy/krc_config/rsi/RSI_MIN.rsi.xml``) the simulator stops, like RSI does. The
+Timeout, 100 in ``legacy/krc_config/rsi/RSI_OV4.rsi.xml``) the simulator stops, like RSI does. The
 counter is also sent in ``<Delay D="..."/>``.
 
 Modes:

@@ -357,13 +357,13 @@ On one host (as CI does), give the bridge `host:=127.0.0.1` and the simulator `-
 - **The camera on Windows and in WSL.** `connect-usb.md`: "as long as the USB device is attached to WSL, it cannot be
   used by Windows." Detach it (`usbipd detach --busid <BUSID>`) before the Windows pipeline uses it.
 
-## 6. Shadow mode needs a program on RSI_MIN
+## 6. Shadow mode is not for the lab controller
 
-In shadow mode the bridge's reply carries no `<OvCmd>`. The print program loads `RSI_OV4`
+In shadow mode the bridge's reply carries no `<OvCmd>`. The lab's print programs load `RSI_OV4`
 (`RSI_CREATE("RSI_OV4.rsi")`), where OvCmd goes through `LIMIT1` (1..100) to `$OV_PRO`. With no OvCmd the input is
 0, `LIMIT1` raises it to 1, and **the robot runs at 1 % override** (`legacy/README.md`;
 `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). `print_session` logs this warning at start-up in shadow mode.
-Run shadow mode only with a print program on `RSI_MIN`.
+For a run that computes and logs everything without acting, use `mode:=closed` with plan `Bpp` (constant OvCmd).
 
 ## Untested steps
 

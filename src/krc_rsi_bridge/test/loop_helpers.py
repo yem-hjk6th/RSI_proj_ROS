@@ -2,7 +2,7 @@
 import bridge_paths  # noqa: F401 - sys.path for plain pytest runs
 from krc_sim.sim import SimStats
 
-# What the controller needs (RSI_MIN.rsi.xml ETHERNET Timeout 100): no Timeout. The tests also bound the
+# What the controller needs (RSI_OV4.rsi.xml ETHERNET Timeout 100): no Timeout. The tests also bound the
 # longest run of late replies far below it and the late share at 1 %, which still passes on a shared
 # CI runner without real-time scheduling.
 LATE_FRAC_ASSERT = 0.01

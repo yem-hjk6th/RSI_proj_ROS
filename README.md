@@ -44,7 +44,7 @@ the legacy code. The controller-side files are templates marked `NOT RUN`.
 | `src/` | ROS 2 packages |
 | `config/e1.yaml` | The parameter set of session E1, one section per node |
 | `legacy/realtime_cl_261023/` | The Python pipeline used in the lab on 2026-10-22 (reference for the port) |
-| `legacy/krc_config/` | Controller-side files of that pipeline: RSI configurations (`RSI_OV4`, `RSI_MIN`), sps.sub, one KRL program |
+| `legacy/krc_config/` | Controller-side files of that pipeline: RSI configurations (`RSI_OV4`, which the lab's print programs load; the older `RSI_MIN`), sps.sub, one KRL program |
 | `data/e1_20261022_165128/` | One real closed-loop print: RSI log, controller log, width readout, frame index, 40 camera frames |
 
 ## Build and test
@@ -92,11 +92,15 @@ tests skip themselves without a sourced workspace.
 In this order, each step only after the previous one passed:
 
 1. **Replay** of E1 on the edge PC (the `krc_replay` tests), and the latency test over the real cable.
-2. **Shadow mode** (`mode:=shadow`) with a print program on **`RSI_MIN`**. In shadow mode the reply carries no OvCmd;
-   on a program that uses `RSI_OV4` the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and **the robot runs
-   at 1 % override**. `print_session` logs this warning at start-up.
-3. **Air step test** (`mode:=step`, no material).
-4. **Print** (`mode:=closed`).
+2. **Air step test** (`mode:=step`, no material).
+3. **Open-loop print** (`mode:=closed` with plan `Bpp`): constant OvCmd; the readout and the controller compute and
+   log everything but do not act.
+4. **Closed-loop print** (`mode:=closed`).
+
+**Do not use shadow mode on the lab controller.** In shadow mode the reply carries no OvCmd. The lab's print programs
+load `RSI_OV4`, where the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and **the robot runs at 1 %
+override**. `print_session` logs this warning at start-up. Shadow mode is only for an RSI configuration without an
+OvCmd input.
 
 ## Safety
 

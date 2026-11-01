@@ -3,7 +3,7 @@
 One launch command starts a print session on the edge PC, the way `legacy/realtime_cl_261023/run_cl.py` did. The session is recorded with rosbag2. `bag_to_legacy` turns the bag into the legacy CSV logs, so that `legacy/realtime_cl_261023/eval_v3_print.py` runs unchanged on ROS sessions.
 
 ```bash
-ros2 launch print_session bringup.launch.py mode:=shadow params_file:=config/e1.yaml
+ros2 launch print_session bringup.launch.py mode:=closed params_file:=config/e1.yaml
 ```
 
 ```bash
@@ -16,9 +16,10 @@ python3 legacy/realtime_cl_261023/eval_v3_print.py --data exported --session <se
 
 > **Shadow mode on `RSI_OV4` means 1 % override.** In shadow mode the reply carries no `<OvCmd>`. On a KRC program that
 > uses `RSI_OV4` (`RSI_CREATE("RSI_OV4.rsi")`) the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and the
-> robot runs at 1 % override (`legacy/README.md`; `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). Run shadow
-> mode with a print program on `RSI_MIN`. The bringup logs this as a warning at start-up, and the session node logs
-> it again as a `WARN` line (`startup.SHADOW_WARNING`).
+> robot runs at 1 % override (`legacy/README.md`; `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). The lab's
+> print programs load `RSI_OV4`, so do not use shadow mode there; for a run that computes and logs everything without
+> acting, use `mode:=closed` with plan `Bpp`. The bringup logs this as a warning at start-up, and the session node
+> logs it again as a `WARN` line (`startup.SHADOW_WARNING`).
 
 ## Bringup (`launch/bringup.launch.py`)
 
