@@ -139,7 +139,7 @@ def test_shadow_mode_warns_about_rsi_ov4():
     from print_session.startup import SHADOW_WARNING
     p = _plan("shadow", cl_controller__plan="A")
     assert p.log[0] == SHADOW_WARNING
-    for needle in ("no OvCmd", "RSI_OV4", "1 % override", "RSI_MIN"):
+    for needle in ("no OvCmd", "RSI_OV4", "1 % override", "Bpp"):
         assert needle in SHADOW_WARNING
     for mode in ("closed", "step"):
         assert SHADOW_WARNING not in _plan(mode, cl_controller__plan="A").log

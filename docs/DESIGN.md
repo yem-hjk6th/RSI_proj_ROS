@@ -125,9 +125,10 @@ See `CLAUDE.md`. In short:
 - no motion streaming;
 - controller-side files are NOT RUN templates.
 
-On hardware, the first runs use the legacy order: replay, then shadow mode (computed but not sent), then an air step
-test, then printing. **Shadow mode needs a print program on `RSI_MIN`:** its reply carries no OvCmd, and on `RSI_OV4`
-the missing input becomes 0, which `LIMIT1` (1..100) raises to 1 % override (`legacy/README.md`).
+On hardware, the first runs are: replay, then an air step test, then an open-loop print (`closed` with plan `Bpp`:
+everything computed and logged, constant OvCmd), then closed-loop printing. **Shadow mode is not for the lab
+controller:** its reply carries no OvCmd, and the lab's print programs load `RSI_OV4`, where the missing input becomes
+0, which `LIMIT1` (1..100) raises to 1 % override (`legacy/README.md`).
 
 ## 7. Tests
 
