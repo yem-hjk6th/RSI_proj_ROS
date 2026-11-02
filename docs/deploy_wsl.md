@@ -385,7 +385,8 @@ Windows 11 build 26200, WSL 2.6.3, kernel `6.6.87.2-microsoft-standard-WSL2`, Ub
 | NVENC in WSL | `ffmpeg -c:v hevc_nvenc` encodes a 1920×1200 test source |
 | Real-time limits | `/etc/security/limits.d/99-realtime.conf` (`@realtime rtprio 99, memlock unlimited`), user in `realtime`. A shell started by `wsl.exe` does not pass PAM and shows `ulimit -r` = 0; `wsl -u root -- su - <user> -c '<cmd>'` shows 99 |
 | Tests, Windows Python 3.12 without ROS | 305 passed, 27 failed: 17 because the throwaway environment had no SciPy (pass with it); 8 timing tests (4 ms loop, simulator schedule: the latency test sent 506 packets where it expects at least 900); 2 ELP golden tests with widths up to 0.0071 mm off, from a different JPEG decoder (the live legacy-against-port test passes). Windows is not a deployment target |
-| `colcon build && colcon test` in WSL | 358 tests, 357 passed, 1 failed: `print_session` `test_shadow_bringup_against_krc_sim`, the launch did not end by itself (section 7.1). With `FASTDDS_BUILTIN_TRANSPORTS=SHM` the four `test_bringup.py` tests pass |
+| `colcon build && colcon test` in WSL, default transport | 358 tests, 357 passed, 1 failed: `print_session` `test_shadow_bringup_against_krc_sim`, the launch did not end by itself (section 7.1). With `FASTDDS_BUILTIN_TRANSPORTS=SHM` the four `test_bringup.py` tests pass |
+| The same with `FASTDDS_BUILTIN_TRANSPORTS=SHM` (branch of this section) | 358 tests, 357 passed, 1 failed: `krc_rsi_bridge` `test_bridge_publishes_reply_record_per_packet`, 750 `ReplyRecord` against 765 `KrcState` received (the test allows a difference of 5). Alone it passed 3 of 3 runs with SHM and 3 of 3 with the default transport: the miss happened under the load of the parallel full run. Watch for missing `ov_cmd` rows in exported lab sessions |
 
 ### 7.1 ROS discovery in mirrored mode
 

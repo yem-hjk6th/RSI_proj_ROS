@@ -5,7 +5,10 @@ For Claude Code sessions on the web (one session per task). Each section below h
 ## State of the repository
 - Everything in `src/` is merged and green in CI. Nothing has run with the controller or a camera.
 - The lab laptop (the planned edge PC) now runs ROS 2 Jazzy in WSL 2: `docs/deploy_wsl.md` §7. All 358 tests ran
-  there; the one failure was the ROS discovery problem of §7.1, fixed with `FASTDDS_BUILTIN_TRANSPORTS=SHM`.
+  there. With the default transport one test failed from the ROS discovery problem of §7.1, fixed with
+  `FASTDDS_BUILTIN_TRANSPORTS=SHM`. With SHM one other test (`test_reply_record`, 15 of 765 records missing) failed
+  once under the load of the full run and passed 3 of 3 alone: keep an eye on record losses under load (T10 adds
+  camera load).
 - Added on 2026-11-02 (inputs for the tasks):
   - `src/cl_controller/patterns/`: the patterns of the programs on the controller (R1v_261016 for the air step test,
     E5, r240, R1v40_OL, R1v12_CL, the corner programs CNh, CNi, CNip, CNj, CNjp);
