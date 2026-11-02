@@ -1,8 +1,11 @@
 # Deployment on WSL 2 (Windows 11 lab laptop)
 
-> **UNTESTED ON HARDWARE.** No step of this guide has been run on the lab laptop, with the KR C4 or with the ELP
-> camera. Only the latency test's loopback run (both sides on one Linux host) runs, in CI. The table in
+> **UNTESTED WITH THE CONTROLLER AND THE CAMERA.** Sections 1 and 2 were set up on the lab laptop on 2026-11-02, and
+> the repository's tests ran there (section 7). Nothing has run with the KR C4 or with the ELP camera yet. The table in
 > [Untested steps](#untested-steps) lists what has not been checked.
+>
+> **Set `FASTDDS_BUILTIN_TRANSPORTS=SHM` in every WSL shell that starts ROS nodes** (section 7.1): in mirrored mode
+> the default Fast DDS discovery between processes on the laptop did not work.
 
 The planned edge PC is the Windows 11 lab laptop. The ROS 2 stack runs in WSL 2. In mirrored networking mode WSL
 shares the laptop's network interfaces, so the controller's RSI configuration needs no change: the PC address in
@@ -365,17 +368,54 @@ In shadow mode the bridge's reply carries no `<OvCmd>`. The lab's print programs
 `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). `print_session` logs this warning at start-up in shadow mode.
 For a run that computes and logs everything without acting, use `mode:=closed` with plan `Bpp` (constant OvCmd).
 
+## 7. Observed on the lab laptop (2026-11-02)
+
+Windows 11 build 26200, WSL 2.6.3, kernel `6.6.87.2-microsoft-standard-WSL2`, Ubuntu 24.04.4, systemd on, NVIDIA RTX
+5070 Ti Laptop GPU. The controller was not connected.
+
+| Item | Result |
+|---|---|
+| ROS 2 Jazzy (`ros-jazzy-ros-base`, `ros-dev-tools`), `usb_cam`, `image-transport-plugins`, `rosbag2-storage-mcap`, `rqt_image_view`, `v4l-utils`, `ffmpeg` | installed from the ROS and Ubuntu apt repositories |
+| Docker | `docker.io` 29.1.3 and `docker-compose-v2` from Ubuntu; user in group `docker` |
+| `%UserProfile%\.wslconfig` `networkingMode=mirrored` | WSL shows the Windows Wi-Fi address on `eth1`; the controller NIC was disconnected, so its address was not seen in WSL yet |
+| Hyper-V firewall | rule `RSI-UDP-59152` (inbound UDP 59152, WSL VM creator ID). The WSL VM setting is `DefaultInboundAction Block`, `AllowHostPolicyMerge True` |
+| Windows Defender Firewall | rule `RSI-UDP-59152-WSL` (inbound UDP 59152, all profiles), added because section 2.2 leaves it open whether it is needed |
+| usbipd-win | 5.3.0 (winget). No device bound or attached yet |
+| Kernel modules | `uvcvideo.ko` and `usbip-core.ko` are present under `/lib/modules/$(uname -r)` (section 3.2, first point settled) |
+| NVENC in WSL | `ffmpeg -c:v hevc_nvenc` encodes a 1920×1200 test source |
+| Real-time limits | `/etc/security/limits.d/99-realtime.conf` (`@realtime rtprio 99, memlock unlimited`), user in `realtime`. A shell started by `wsl.exe` does not pass PAM and shows `ulimit -r` = 0; `wsl -u root -- su - <user> -c '<cmd>'` shows 99 |
+| Tests, Windows Python 3.12 without ROS | 305 passed, 27 failed: 17 because the throwaway environment had no SciPy (pass with it); 8 timing tests (4 ms loop, simulator schedule: the latency test sent 506 packets where it expects at least 900); 2 ELP golden tests with widths up to 0.0071 mm off, from a different JPEG decoder (the live legacy-against-port test passes). Windows is not a deployment target |
+| `colcon build && colcon test` in WSL | 358 tests, 357 passed, 1 failed: `print_session` `test_shadow_bringup_against_krc_sim`, the launch did not end by itself (section 7.1). With `FASTDDS_BUILTIN_TRANSPORTS=SHM` the four `test_bringup.py` tests pass |
+
+### 7.1 ROS discovery in mirrored mode
+
+Two ROS processes in WSL, one `ros2 topic pub` and one `ros2 topic echo`, with the default Fast DDS settings: no
+message in 10 s, and `ros2 topic list` does not show the topic. Also no message with
+`ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, with `FASTDDS_BUILTIN_TRANSPORTS=UDPv4`, or with both. With
+`FASTDDS_BUILTIN_TRANSPORTS=SHM` the message arrives. The cause was not found; the RSI UDP socket on loopback is not
+affected (the bridge tests pass).
+
+Every edge node runs on the laptop, so shared memory is enough:
+
+```bash
+export FASTDDS_BUILTIN_TRANSPORTS=SHM
+```
+
+A client on another machine (`docs/DEPLOY.md`) cannot see the graph this way. For a remote client, try the Fast DDS
+Discovery Server of `docs/DEPLOY.md` first (unchecked in mirrored mode).
+
 ## Untested steps
 
 | Step | Status |
 |---|---|
-| 1 A / B: WSL 2 install, ROS 2 Jazzy or Docker in WSL | untested on the laptop; the Docker commands are CI's |
-| 2.1 mirrored mode, same address in WSL | untested |
-| 2.2 Hyper-V UDP rule; whether a Windows Defender Firewall rule is also needed | untested; the second point unconfirmed |
+| 1 A / B: WSL 2 install, ROS 2 Jazzy or Docker in WSL | installed (section 7); Docker builds not run on the laptop |
+| 2.1 mirrored mode, same address in WSL | Wi-Fi address seen in WSL; the controller NIC not yet (disconnected) |
+| 2.2 Hyper-V UDP rule; whether a Windows Defender Firewall rule is also needed | both rules added (section 7); whether the second is needed still unconfirmed |
 | 2.3 portproxy is TCP only | unconfirmed from the Microsoft page |
+| 7.1 ROS discovery between processes | default UDP discovery fails; SHM works (section 7.1) |
 | 3.1 usbipd bind / attach of the ELP | untested |
-| 3.2 `uvcvideo` in the WSL kernel, MJPG 1920×1200 over USB/IP | untested, unconfirmed |
+| 3.2 MJPG 1920×1200 over USB/IP | untested; the `uvcvideo` module is present |
 | 3.3 usb_cam frame rate, dropped frames, stamp delay | untested; no expected stamp delay yet |
 | 4 latency test over the cable to the laptop | untested; only the loopback run (one Linux host) runs, in CI |
-| 4 real-time limits of the reply process in WSL (`rt_priority`, `cpu`) | untested |
+| 4 real-time limits of the reply process in WSL (`rt_priority`, `cpu`) | limits set; only through `su -` (section 7); not run with `rt_priority` > 0 |
 | 5 port and camera conflicts | taken from the Microsoft pages, not observed |

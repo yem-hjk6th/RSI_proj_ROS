@@ -1,0 +1,12 @@
+{
+  "_comment": "vendored copy of 1018/desktop_5080/readout/pattern/pattern_usr_ELP_R1v_261016.json (src_to_pattern.py of usr_ELP_R1v_261016.src); segs path relative to this folder",
+  "src": "usr_ELP_R1v_261016",
+  "segs": "usr_ELP_R1v_261016_segs.csv",
+  "z_cmd": {
+    "x0_z0": [600.0, 0.8],
+    "x1_z1": [970.0, 2.3]
+  },
+  "x_start": 945.0,
+  "x_window": [765.0, 950.0],
+  "min_s_tip": 9.0
+}
