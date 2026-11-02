@@ -18,9 +18,9 @@ For Claude Code sessions on the web (one session per task). Each section below h
 
 | Task | Blocks | Priority |
 |---|---|---|
-| T10 camera capture and recording | any print through ROS that keeps its video (the width dataset needs it) | 1 |
-| T11 bore1 readout | plan `A_b1` | 2 |
-| T12 walls | the wall programs `W4L28_*` | 3, after T10 and T11 are merged |
+| T10 (#26) camera capture and recording | any print through ROS that keeps its video (the width dataset needs it) | 1 |
+| T11 (#27) bore1 readout | plan `A_b1` | 2 |
+| T12 (#28) walls | the wall programs `W4L28_*` | 3, after T10 and T11 are merged |
 
 The air step test (`mode:=step`) and an open-loop print without video need none of them.
 
@@ -36,7 +36,7 @@ The air step test (`mode:=step`) and an open-loop print without video need none 
 ## Prompt for T10
 
 ```
-In this repository, implement task T10 (docs/tasks/T10.md): camera capture and recording.
+In this repository, implement task T10 (docs/tasks/T10.md, issue #26): camera capture and recording.
 Read CLAUDE.md, docs/DESIGN.md, docs/deploy_wsl.md section 7 and docs/tasks/T10.md first, then the legacy
 references the task lists (legacy/pipeline_cage1012/elp.py, borescope.py, config.py and
 legacy/realtime_cl_261023/elp_hevc.py). Work on a branch t10-camera-capture and open a PR to main named
@@ -48,7 +48,7 @@ for the lab, and claim no hardware result.
 ## Prompt for T11
 
 ```
-In this repository, implement task T11 (docs/tasks/T11.md): the bore1 width readout
+In this repository, implement task T11 (docs/tasks/T11.md, issue #27): the bore1 width readout
 width_readout_bore1. Read CLAUDE.md, docs/DESIGN.md and docs/tasks/T11.md first, then
 legacy/realtime_cl_261023/bore1/ (bore1_head.py, bore1_rt.py) and the E1 data under data/e1_20261022_165128/.
 The weights (.pt) are not in the repository: build the head interface with the torch and replay implementations,
@@ -61,7 +61,7 @@ Claim no hardware result.
 ## Prompt for T12 (only after T10 and T11 are merged)
 
 ```
-In this repository, implement task T12 (docs/tasks/T12.md): the multi-layer (walls) variant.
+In this repository, implement task T12 (docs/tasks/T12.md, issue #28): the multi-layer (walls) variant.
 Read CLAUDE.md, docs/DESIGN.md, docs/tasks/T12.md and legacy/realtime_cl_261023_ml/README.md first. Port the
 changes listed there without changing the single-layer behaviour (every existing golden test must stay green).
 Work on a branch t12-walls and open a PR to main named "T12: multi-layer walls". CI must pass.
