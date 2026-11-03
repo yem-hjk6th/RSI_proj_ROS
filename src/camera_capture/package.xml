@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>camera_capture</name>
+  <version>0.1.0</version>
+  <description>Capture of the cell's cameras (V4L2) with recording in the same process: the ELP as HEVC through ffmpeg (hevc_nvenc) with the MJPG AVI fallback, borescopes as mp4, frame CSVs in the legacy columns; image and preview topics, and a 2x2 preview window (port of the legacy elp.py, borescope.py and elp_hevc.py).</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>krc_interfaces</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <!-- the HEVC recorder's encoder process; the V4L2 controls are set and read back with v4l2-ctl -->
+  <exec_depend>ffmpeg</exec_depend>
+  <exec_depend>v4l-utils</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

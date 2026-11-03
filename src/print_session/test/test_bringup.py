@@ -158,3 +158,88 @@ def test_shadow_bringup_against_krc_sim(tmp_path):
     lines = (rd / "rsi_data_smoke.csv").read_text(encoding="utf-8").splitlines()
     assert len(lines) - 1 == n_state
     assert (exp / "raw_video" / "smoke" / "session_meta.json").exists()
+
+
+# ---------------------------------------------------------------------------------------- T10: readout, cameras
+@pytest.mark.parametrize("args,needle", [
+    (["mode:=closed", "readout:=false"], "need the ELP readout"),       # no readout: step mode only
+    (["mode:=step", "readout:=maybe"], "readout"),                      # true or false only
+    (["mode:=step", "start_camera:=true", "cameras:=CAMS"], "start_camera"),   # one camera driver, not both
+])
+def test_readout_and_camera_switch_refusals(tmp_path, args, needle):
+    cams = tmp_path / "cams.yaml"
+    cams.write_text(yaml.safe_dump(dict(elp=dict(ros__parameters=dict(source="synthetic")))), encoding="utf-8")
+    args = [a.replace("CAMS", str(cams)) for a in args]
+    proc = _launch(*args, f"params_file:={E1_YAML}", f"out_dir:={tmp_path}", "session:=x")
+    out = _finish(proc, 60)
+    assert proc.returncode != 0 and needle in out, out[-2000:]
+    assert not (tmp_path / "x" / "session_meta.json").exists()
+
+
+def _synthetic_cameras(tmp_path):
+    """Two camera_capture nodes on synthetic sources (no camera in CI), recording from the first RSI packet."""
+    common = dict(source="synthetic", wait_for_rsi=True, preview_width=160)
+    cams = dict(
+        elp=dict(ros__parameters=dict(common, kind="generic", width=320, height=200, fps=30.0, codec="mjpg",
+                                      segment_s=2.0)),
+        bore1=dict(ros__parameters=dict(common, kind="borescope", width=160, height=120, fps=15.0, codec="mp4v",
+                                        file_prefix="bore", csv_prefix="borescope_frames", segment_s=900.0)))
+    p = tmp_path / "cameras.yaml"
+    p.write_text(yaml.safe_dump(cams, sort_keys=False), encoding="utf-8")
+    return p
+
+
+def test_step_bringup_without_readout_with_cameras(tmp_path):
+    """readout:=false (the bringup fix of T10: an empty image_topic:= is rejected by ros2 launch) in step mode, with
+    a cameras file: no readout node, the cameras record to <session>/raw_video from the first RSI packet, CSV rows 1:1
+    with the frames in the files, and every camera's block in session_meta.json."""
+    from camera_capture.verify import check_dir, read_frames_csv
+    from krc_sim.sim import SimConfig, SimProcess
+
+    from print_session.startup import pattern_dirs
+
+    port = _free_udp_port()
+    params = _params(tmp_path, port, plan="A")
+    out_dir = tmp_path / "sessions"
+    proc = _launch("mode:=step", "readout:=false", f"params_file:={params}", f"out_dir:={out_dir}", "session:=cams",
+                   f"cameras:={_synthetic_cameras(tmp_path)}")
+    sdir = out_dir / "cams"
+    try:
+        t_end = time.monotonic() + 60
+        while time.monotonic() < t_end and not ((sdir / "session_meta.json").exists() and _bound(port)):
+            assert proc.poll() is None, proc.stdout.read()[-4000:]
+            time.sleep(0.2)
+        assert _bound(port), "bridge did not bind"
+        time.sleep(3.0)                                # discovery; the cameras capture but do not record yet
+        pat = next(d / "pattern_usr_ELP_R1v30_CLp_261022.json" for d in pattern_dirs()
+                   if (d / "pattern_usr_ELP_R1v30_CLp_261022.json").exists())
+        t_rsi = time.time()
+        st = SimProcess(SimConfig(port=port, pattern_file=str(pat), duration_s=5.0)).start().result(60)
+    except BaseException:
+        os.killpg(proc.pid, signal.SIGINT)
+        print(proc.communicate(timeout=60)[0][-6000:])
+        raise
+    out = _finish(proc, 90)
+    print(out[-3000:])
+    assert proc.returncode == 0, out[-4000:]
+    assert st.sent >= 1000 and not st.timeout_stopped
+    assert "[width_readout_elp" not in out                            # no readout node
+
+    meta = json.loads((sdir / "session_meta.json").read_text(encoding="utf-8"))
+    ps = meta["print_session"]
+    assert ps["readout"] is False and ps["image_topic"] == "" and ps["cameras"] == ["elp", "bore1"]
+    assert ps["end_reason"] == "RSI disconnected" and meta["realtime"]["mode"] == "step"
+    raw = sdir / "raw_video"
+    res = {r["csv"]: r for r in check_dir(raw)}
+    assert set(res) == {"elp_frames_cams.csv", "borescope_frames_cams.csv"}
+    for name, csv_name in (("elp", "elp_frames_cams.csv"), ("bore1", "borescope_frames_cams.csv")):
+        r = res[csv_name]
+        assert r["ok"] and r["rows"] > 20, r
+        b = meta["cameras"][name]
+        assert b["final"] and b["measured"]["frames_written"] == r["rows"]
+        assert b["measured"]["frames_dropped_queue"] == 0 and b["measured"]["fallback"] == []
+        rows = read_frames_csv(raw / csv_name)
+        assert rows[0]["frame_idx"] == "1" and float(rows[0]["pc_ts_wall"]) >= t_rsi - 0.5   # waited for RSI
+    assert all(f["file"].endswith(".avi") for f in res["elp_frames_cams.csv"]["files"])
+    assert len(res["elp_frames_cams.csv"]["files"]) >= 2                                      # 2 s segments
+    assert [f["file"][-4:] for f in res["borescope_frames_cams.csv"]["files"]] == [".mp4"]

@@ -167,7 +167,7 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
 
     # ---- run_cl.main refusals that no node does
     if mode != "step" and not image_topic:
-        raise Refused("shadow / closed need the ELP readout: give image_topic (run_cl.py:588-589)")
+        raise Refused("shadow / closed need the ELP readout: readout:=true with an image_topic (run_cl.py:588-589)")
     needs_b1 = law_cfg.resolved_primary() == "bore1" or "bore1" in law_cfg.force_seg.values()
     ctrl = Controller(cfg, pat, law_cfg, plateaus, mode=mode)
     if mode != "step":

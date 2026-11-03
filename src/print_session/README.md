@@ -28,10 +28,13 @@ python3 legacy/realtime_cl_261023/eval_v3_print.py --data exported --session <se
 |---|---|---|
 | `mode` | **required, no default** | `shadow` \| `closed` \| `step`. `run_cl.py` has refused a missing `--mode` since 261020 r2: a forgotten mode used to mean 1 % override. |
 | `params_file` | **required** | One YAML with a section per node: `krc_rsi_bridge`, `cl_controller`, `width_readout_elp`, `print_session`. `config/e1.yaml` is the example. |
-| `image_topic` | `/elp/image_raw` | ELP image topic for the readout. Empty means no readout, which only `step` allows. |
-| `start_camera` | `false` | Also start `usb_cam`, publishing on `image_topic`. |
+| `image_topic` | `/elp/image_raw` | ELP image topic for the readout. |
+| `readout` | `true` | `false`: no ELP readout, which only `step` allows. (`image_topic:=` with an empty value is rejected by `ros2 launch` as a malformed argument, so it cannot switch the readout off.) |
+| `cameras` | – | `camera_capture` parameter YAML, one section per camera node (examples: `camera_capture/config/cameras_e1.yaml`, `cameras_cage.yaml`). See Camera. |
+| `preview` | `false` | Also open the 2×2 preview window of the cameras' preview topics (`camera_capture` `preview_node`). |
+| `start_camera` | `false` | Instead of `cameras`: start `usb_cam`, publishing on `image_topic`, without recording. |
 | `camera_params` | – | `usb_cam` parameter YAML (example: `config/elp_usb_cam.yaml`). |
-| `out_dir` | `sessions` | The session is written to `<out_dir>/<session>/`: `session_meta.json` and `bag/`. |
+| `out_dir` | `sessions` | The session is written to `<out_dir>/<session>/`: `session_meta.json`, `bag/` and, with `cameras`, `raw_video/`. |
 | `session` | `YYYYmmdd_HHMMSS` | Session name. |
 
 Nodes started:
@@ -40,7 +43,8 @@ Nodes started:
 - `width_readout_elp`
 - the recorder (`ros2 bag record`)
 - `print_session` (the session node)
-- `usb_cam`, when asked.
+- one `camera_capture` node per section of the `cameras` file, or `usb_cam`, when asked;
+- the preview window, when asked.
 
 The start-up checks (`print_session/startup.py`) run in the launch before any node starts. A refusal stops the launch with its reason. The session node runs them again and writes `session_meta.json` before RSI connects.
 
@@ -56,9 +60,28 @@ In `run_cl.py` both sides shared one `CtrlCfg`. A different value in the `krc_rs
 
 ## Camera
 
-The camera driver is not in this repository.
+**`cameras:=<file>` (`camera_capture`, task T10).** One node per section of the file; the section name is the node
+name (`elp`, `bore1`, ...). Each node captures its camera, records it in the same process and publishes
+`/<name>/image_raw` (capture-time stamps) and `/<name>/preview` (5 Hz, 640 px). The bringup sets for every camera:
+- `session` (the file names carry it);
+- `video_dir` = `<out_dir>/<session>/raw_video/` (segment files, frame CSVs, `elp_recorder_<ses>.json`);
+- `session_meta` = `<session>/session_meta.json`: each camera writes its `cameras.<name>` block (requested,
+  read back, measured: frames, dropped, fps, segments, encoder, fallback).
 
-**Choice: `usb_cam`**, `ros-jazzy-usb-cam` 0.8.1-1. Its Jazzy release is in `ros/rosdistro` `jazzy/distribution.yaml` (release repository `ros2-gbp/usb_cam-release`, tag `release/jazzy/usb_cam/0.8.1-1`).
+Refused (`print_session/cameras.py`): `cameras` together with `start_camera:=true`; a camera section that sets
+`session`, `video_dir` or `session_meta`; two cameras with the same topic or file names; with the readout on, an
+`image_topic` that no camera publishes. The example files record from the first RSI packet (`wait_for_rsi`, the legacy
+default). Details, formats and the hardware checks: `src/camera_capture/README.md`.
+
+```bash
+ros2 launch print_session bringup.launch.py mode:=closed params_file:=config/e1.yaml \
+    cameras:=src/camera_capture/config/cameras_e1.yaml preview:=true
+```
+
+**Option: `usb_cam`** (`start_camera:=true`), publishing on `image_topic`, without recording. It is not in this
+repository.
+
+Before T10 the camera driver was `usb_cam`, `ros-jazzy-usb-cam` 0.8.1-1. Its Jazzy release is in `ros/rosdistro` `jazzy/distribution.yaml` (release repository `ros2-gbp/usb_cam-release`, tag `release/jazzy/usb_cam/0.8.1-1`).
 
 Why `usb_cam` and not `v4l2_camera` (also released for Jazzy, 0.7.3-1):
 - the legacy recorder read the ELP as MJPG at 1920×1200;
@@ -72,13 +95,16 @@ sudo apt install ros-jazzy-usb-cam
 ```
 
 - **Encoding.** `mjpeg2rgb` publishes `sensor_msgs/Image` with encoding `rgb8`, which `width_readout_elp` reads (`image.py`: `bgr8`, `rgb8`, `bgra8`, `rgba8`).
-- **Stamp.** `header.stamp` is the V4L2 buffer timestamp: for `uvcvideo`, `CLOCK_MONOTONIC` at the start of the frame. `usb_cam` shifts it to wall time with an offset it measures once at start (`usb_cam/utils.hpp`: `get_epoch_time_shift_us`, `calc_img_timestamp`).
+- **Stamp** (`camera_capture` stamps its images the same way). `header.stamp` is the V4L2 buffer timestamp: for `uvcvideo`, `CLOCK_MONOTONIC` at the start of the frame. `usb_cam` shifts it to wall time with an offset it measures once at start (`usb_cam/utils.hpp`: `get_epoch_time_shift_us`, `calc_img_timestamp`).
   - That is the capture time, on the same clock as `KrcState.stamp`.
   - It is not the time the image reached the readout.
   - The readout gates the frame on that time (`use_header_stamp: true`).
   - A wall-clock step after the camera started (NTP) shifts the stamps. Keep the edge PC's clock disciplined before a session.
 
 ## Recording
+
+With `cameras`, the video and the frame CSVs are written by the camera nodes to `<session>/raw_video/` in the legacy
+formats (`camera_capture/README.md`, Recording). The bag holds no images.
 
 `ros2 bag record -s mcap --regex '^/(krc/(state|override_cmd|reply_record)|controller/ctrl_record|width/.+)$'` records:
 - `/krc/state`, `/krc/override_cmd`;
@@ -122,6 +148,7 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
 |---|---|
 | `test_roundtrip.py` | 1: E1 CSVs → bag (`test/e1_bag.py`, test-only writer) → export → every carried column equal to the original string. |
 | `test_eval_unchanged.py` | 2: the legacy eval on the original logs reproduces the stored eval JSON (keys that need inputs not in this repository are listed). On the exported logs it gives the same result. |
-| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter, the shadow-mode warning in the log). 4: the launch refuses without `mode`. |
+| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter, the shadow-mode warning in the log). 4: the launch refuses without `mode`. T10: `readout:=false` in step mode with a `cameras` file of two synthetic cameras against `krc_sim` (no readout node; `raw_video/` CSVs 1:1 with the files, recording from the first RSI packet, the `cameras` blocks); the refusals of `readout:=false` outside step mode, of a non-boolean `readout` and of `cameras` with `start_camera`. |
+| `test_cameras.py` | The `cameras` file plan and its refusals; the example camera files keep the legacy profiles. |
 | `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only). |
 | `test_export_unit.py` | Exporter formats and joins on hand-made messages. |

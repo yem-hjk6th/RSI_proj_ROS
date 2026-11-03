@@ -1,0 +1,58 @@
+# Cameras of a print session as E1 recorded them (data/e1_20261022_165128/raw_video/session_meta.json): the ELP and
+# one borescope. One section per camera_capture node; the section name is the node name and gives the topics
+# /<name>/image_raw and /<name>/preview. NOT tested on hardware.
+#
+#   ros2 launch print_session bringup.launch.py mode:=closed params_file:=config/e1.yaml \
+#       cameras:=src/camera_capture/config/cameras_e1.yaml
+#
+# The bringup sets session, video_dir (<session>/raw_video) and session_meta for every camera; do not set them here.
+# Device paths are placeholders: list the links with `ls -l /dev/v4l/by-id /dev/v4l/by-path` and check each one with
+# `v4l2-ctl -d <link> --list-formats-ext` (README, Hardware checks). The two ELP units of the cage share name and USB
+# serial, so their by-id links collide: use by-path links for the ELPs.
+elp:
+  ros__parameters:
+    kind: elp
+    device: /dev/v4l/by-path/<ELP_A_USB_PORT>-video-index0     # placeholder
+    fourcc: MJPG                  # E1: MJPG 1920x1200 requested at 60 fps, 78.4 fps measured
+    width: 1920
+    height: 1200
+    fps: 60.0
+    # Set in this order, every one read back. E1 (DirectShow): AUTO_EXPOSURE 0.25 = manual, EXPOSURE -7 = 2^-7 s =
+    # 7.81 ms, gain 0, auto WB off, 4600 K. exposure_time_absolute is in 100 us: 78 = 7.8 ms (computed; to be checked
+    # on the camera against a legacy frame, README hardware check 3).
+    controls: [auto_exposure=1, exposure_time_absolute=78, gain=0, white_balance_automatic=0,
+               white_balance_temperature=4600]
+    file_prefix: elp              # elp_<ses>_<seg:03d>_<segment start>.mp4
+    csv_prefix: elp_frames        # elp_frames_<ses>.csv
+    tag: ""
+    codec: hevc                   # ffmpeg hevc_nvenc (legacy elp_hevc.py), MJPG AVI fallback
+    segment_s: 60.0
+    fallback_segment_s: 60.0
+    jpeg_quality: 95              # the MJPG AVI fallback
+    cq: 18
+    fps_tag: 78.4
+    ffmpeg: ""                    # "" = $RT_FFMPEG, then ffmpeg on PATH
+    queue_frames: 256             # capture -> writer, 6.9 MB per frame (legacy queue_frames)
+    wait_for_rsi: true            # record from the first RSI packet (legacy WAIT_FOR_RSI_DEFAULT)
+    publish_raw: true             # /elp/image_raw for width_readout_elp
+    preview_hz: 5.0
+    preview_width: 640
+
+bore1:
+  ros__parameters:
+    kind: borescope               # never gets an exposure control (legacy borescope.py)
+    device: /dev/v4l/by-id/<BORE1_ID>-video-index0              # placeholder
+    fourcc: ""                    # the driver's default format, as the legacy capture
+    width: 1280
+    height: 720
+    fps: 30.0                     # legacy FPS_NOMINAL
+    file_prefix: bore             # bore_<ses>_<seg:03d>_<segment start>.mp4
+    csv_prefix: borescope_frames  # borescope_frames_<ses>.csv
+    tag: ""
+    codec: mp4v
+    segment_s: 900.0              # legacy SEGMENT_MINUTES 15
+    queue_frames: 64
+    wait_for_rsi: true
+    publish_raw: true             # /bore1/image_raw for the bore1 readout (T11)
+    preview_hz: 5.0
+    preview_width: 640
