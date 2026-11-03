@@ -142,8 +142,10 @@ def _step_replay(which, t_scale=1.0, t_end=None, period=0.05):
     else:
         from rsi_ring import RsiRing
         from rt_readout import Pattern
-        lcfg = legacy_ctrl.CtrlCfg(**{f.name: getattr(cfg, f.name) for f in dataclasses.fields(cfg)})
-        llc = legacy_law.LawCfg(**{f.name: getattr(lc, f.name) for f in dataclasses.fields(lc)})
+        assert cfg.sat_s == 0.0 and lc.sources == ""        # single-layer E1: the walls fields (T12) are off
+        lcf, llf = ({f.name for f in dataclasses.fields(k)} for k in (legacy_ctrl.CtrlCfg, legacy_law.LawCfg))
+        lcfg = legacy_ctrl.CtrlCfg(**{f.name: getattr(cfg, f.name) for f in dataclasses.fields(cfg) if f.name in lcf})
+        llc = legacy_law.LawCfg(**{f.name: getattr(lc, f.name) for f in dataclasses.fields(lc) if f.name in llf})
         c = legacy_ctrl.Controller(lcfg, Pattern(E.PATTERN), "closed", llc, pl)
         ring = RsiRing(tau_v=lcfg.tau_v)
         out = []

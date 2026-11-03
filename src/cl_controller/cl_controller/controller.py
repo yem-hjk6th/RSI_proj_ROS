@@ -12,6 +12,12 @@ Heartbeat: refreshed only while the last update succeeded within wd_s and the ne
 ring_fresh_s; the bridge's watchdog takes over when it goes stale.
 Speed check: measured TCP speed vs v_prog x OvCmd / ov_base per plateau on the first `speed_legs` legs; then it stops.
 A mismatch latches forced open loop (speed_check "latch").
+
+Multi-layer walls (legacy/realtime_cl_261023_ml/rt_controller.py), active only with a pattern whose segs csv has a
+z_off column: the leg / on-A test takes the nearest planned layer (Pattern.leg_at / z_cmd with z), the print window
+opens on layer 1 and closes only at the planned last Z (Pattern.last_z), and the wall stop rule (sat_s > 0): on a
+seen leg of layer >= 2 (planned offset >= sat_min_dz), OvCmd from the feedback (plan not Bpp) at ov_max for sat_s in
+a row latches forced open loop like the speed check (sat_alarm).
 """
 import logging
 import math
@@ -64,6 +70,8 @@ class CtrlCfg:
     speed_check: str = "latch"  # latch | alarm | off
     speed_tol: float = 0.15
     speed_legs: int = 2
+    sat_s: float = 0.0          # wall stop rule: s at ov_max on a seen leg of layer >= 2 -> forced open loop; 0 = off
+    sat_min_dz: float = 0.6     # mm, planned offset from which a leg counts as layer >= 2 (layer 1: 0 / +0.20)
 
 
 def ov_from_logk(cfg: CtrlCfg, logk: float) -> int:
@@ -90,14 +98,17 @@ class PrintWindow:
             return self.state
         x, y, z = xyz[0], xyz[1], xyz[2]
         tol = self.cfg.window_xy_tol
-        onz = self.cfg.window_ignore_z or abs(z - self.pat.z_cmd(x)) < self.cfg.z_tol
+        onz = self.cfg.window_ignore_z or abs(z - self.pat.z_cmd(x)) < self.cfg.z_tol    # opens on layer 1 only
         if self.state == "before":
             fx, fy = self.pat.first_pt
             if onz and abs(x - fx) <= tol and abs(y - fy) <= 1.0:
                 self.state, self.t_start = "inside", t
         else:
             lx, ly = self.pat.last_pt
-            if abs(x - lx) <= tol and abs(y - ly) <= 1.0:
+            # walls pass the last x / y on every layer: close only at the planned last Z
+            onlast = (getattr(self.pat, "last_z", None) is None or self.cfg.window_ignore_z
+                      or abs(z - self.pat.last_z) < self.cfg.z_tol)
+            if abs(x - lx) <= tol and abs(y - ly) <= 1.0 and onlast:
                 self.state, self.t_end = "after", t
         return self.state
 
@@ -176,6 +187,11 @@ def validate_law_cfg(lc: LawCfg) -> None:
             bad.append("target schedule with an open-loop schedule")
     if lc.force_seg and lc.plan != "B":
         bad.append("force_seg is for plan B only")
+    if lc.sources:                          # Law raises ValueError for these (legacy _ml); refuse them at start
+        keep = [s.strip() for s in lc.sources.split(",") if s.strip()]
+        if lc.resolved_primary() not in keep or any(s not in ("elp", "bore1") for s in keep):
+            bad.append(f"control_sources {lc.sources!r} (need elp / bore1, including the primary "
+                       f"{lc.resolved_primary()})")
     if bad:
         raise Refused("refused: " + "; ".join(bad))
 
@@ -211,6 +227,8 @@ class Controller:
         self._sc_leg: Optional[int] = None
         self.speed_results: list = []
         self.speed_alarm = False
+        self._sat_t0: Optional[float] = None    # start of the current stretch at ov_max (wall stop rule)
+        self.sat_alarm = False                  # the wall stop rule latched forced open loop
 
     # ---------------------------------------------------------------- inputs
     def push_state(self, t: float, ipoc: float, xyz, v_eff: Optional[float] = None) -> str:
@@ -243,6 +261,11 @@ class Controller:
                 self._speed_check(now, ov)
             except Exception:  # noqa: BLE001 - a check must never stop the controller
                 log.exception("speed check failed")
+        if self.cfg.sat_s > 0 and self.mode != "step" and not self.force_default:
+            try:
+                self._sat_check(now)
+            except Exception:  # noqa: BLE001 - a check must never stop the controller
+                log.exception("saturation check failed")
         return ov, self.out_src
 
     def published_ov(self) -> int:
@@ -268,6 +291,27 @@ class Controller:
         if self.out_src == "control":
             return self.law.state
         return "default"
+
+    def _sat_check(self, now: float) -> None:
+        """Wall stop rule (CtrlCfg.sat_s): OvCmd from the feedback at ov_max on a seen leg of layer >= 2 for sat_s in
+        a row -> sat_alarm and the forced latch (the node then publishes source "forced", which the bridge latches)."""
+        cfg = self.cfg
+        if self.sat_alarm:
+            return
+        w = self._where() if (self.win.state == "inside" and self.out_src == "control") else None
+        hit = (w is not None and w[1] and self.law_cfg.plan != "Bpp" and self.out_ov >= cfg.ov_max
+               and self.pat.plane_dz(w[0]) >= cfg.sat_min_dz)
+        if not hit:
+            self._sat_t0 = None
+            return
+        if self._sat_t0 is None:
+            self._sat_t0 = now
+        elif now - self._sat_t0 >= cfg.sat_s:
+            log.error("WALL STOP RULE: OvCmd %d = ov_max for %.1f s on leg %d (planned offset %.2f mm, layer >= 2) -> "
+                      "LATCHING FORCED OPEN LOOP (OvCmd %d)", self.out_ov, now - self._sat_t0, w[0],
+                      self.pat.plane_dz(w[0]), cfg.ov_default)
+            self.sat_alarm = True
+            self.force_default = True
 
     def _speed_check(self, now: float, ov_pub: int) -> None:
         cfg = self.cfg
@@ -321,8 +365,8 @@ class Controller:
             return None
         _, P, v = lt
         pat, cfg = self.pat, self.cfg
-        leg, dy = pat.leg_at(P[1])
-        onz = cfg.window_ignore_z or abs(P[2] - pat.z_cmd(P[0])) < cfg.z_tol
+        leg, dy = pat.leg_at(P[1], P[2], P[0])                                  # the leg of the nearest layer
+        onz = cfg.window_ignore_z or abs(P[2] - pat.z_cmd(P[0], P[2], P[1])) < cfg.z_tol
         on_a = dy <= 1.0 and onz and pat.xwin[0] <= P[0] <= pat.xwin[1] and leg >= 1
         return leg, on_a, pat.x_start - P[0], float(v)
 

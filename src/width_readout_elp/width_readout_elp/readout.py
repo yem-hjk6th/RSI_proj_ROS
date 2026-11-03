@@ -9,6 +9,12 @@ Port of ``legacy/realtime_cl_261023/rt_readout.py``. Same math and the same gate
   ``walk`` (at most 9 mm from the centre); contrast gate 0.08; coverage gates 0.7 per column and 0.8 per bin.
 * ``RtReadout.gate``: the frame gates on the RSI pose (stale, no_track, z_or_dir, leg_or_xwin, min_s_tip).
 
+Multi-layer walls (``legacy/realtime_cl_261023_ml/rt_readout.py``): when the segs csv has a ``z_off`` column (planned
+Z above the layer-1 plane, per segment), every A leg carries the offset of its first A segment. The gate then takes
+the nearest planned layer and that layer's leg at the tip's y, and the readout plane is lifted by the leg's offset
+(``Gate.dz``). Without the column (every single-layer pattern), or when ``z_cmd`` / ``leg_at`` are called without z,
+the single-layer code path runs unchanged.
+
 Differences from legacy: no SciPy (the Gaussian filter and the Euler rotation are written in numpy with the same
 definitions), and ``frame_rows`` is split into ``sample_chroma`` and ``rows_from_chroma``. Pure Python, numpy and
 OpenCV; no ROS imports.
@@ -160,6 +166,11 @@ class Pattern:
     """Print pattern: A-leg y positions, first / last print point, z command, print window.
 
     The segs csv has the columns seg, kind, x0, y0, x1, y1, ..., leg.
+
+    Multi-layer (``ml``, a segs csv with a ``z_off`` column): ``leg_dz`` is each A leg's planned offset above the
+    layer-1 plane (the ``z_off`` of its first A segment), ``dz_levels`` the distinct offsets and ``last_z`` (pattern
+    json) the planned Z of the last print point, which gates the window close. ``z_cmd(x, z, y)``, ``leg_at(y, z, x)``
+    and ``plane_dz(leg)`` are layer-aware; called without z they are the single-layer functions.
     """
 
     def __init__(self, cfg, root=None):
@@ -168,27 +179,53 @@ class Pattern:
         self.src = c["src"]
         with open(resolve(c["segs"], cfg.parent, root), newline="", encoding="utf-8") as f:
             segs = list(csv.DictReader(f))
-        ys = {}
+        self.ml = bool(segs) and "z_off" in segs[0]
+        ys, offs = {}, {}
         for r in segs:
             if r["kind"] == "A":
                 ys.setdefault(int(r["leg"]), float(r["y0"]))
+                if self.ml:
+                    offs.setdefault(int(r["leg"]), float(r["z_off"]))
         self.leg_ids = np.array(sorted(ys))
         self.leg_ys = np.array([ys[k] for k in self.leg_ids])
+        self.leg_dz = np.array([offs.get(k, 0.0) for k in self.leg_ids])
         self.first_pt = (float(segs[0]["x0"]), float(segs[0]["y0"]))
         self.last_pt = (float(segs[-1]["x1"]), float(segs[-1]["y1"]))
         (self.x0, self.z0), (self.x1, self.z1) = c["z_cmd"]["x0_z0"], c["z_cmd"]["x1_z1"]
         self.x_start = float(c["x_start"])
         self.xwin = c["x_window"]
         self.min_s_tip = float(c["min_s_tip"])
+        self.last_z = float(c["last_z"]) if (self.ml and c.get("last_z") is not None) else None
+        self.dz_levels = np.unique(self.leg_dz) if self.ml else np.zeros(1)
 
-    def z_cmd(self, x):
-        return self.z0 + (self.z1 - self.z0) * (x - self.x0) / (self.x1 - self.x0)
+    def z_cmd(self, x, z=None, y=None):
+        """Layer-1 plane at x. Multi-layer with z: plus the planned offset nearest to z - plane; with z and y: plus
+        the offset of the A leg that ``leg_at(y, z, x)`` picks, so a pass on another layer of the same wall (same y,
+        the unseen +X passes) is one layer step off and fails the z test."""
+        z1 = self.z0 + (self.z1 - self.z0) * (x - self.x0) / (self.x1 - self.x0)
+        if not self.ml or z is None:
+            return z1
+        if y is not None:
+            return z1 + self.plane_dz(self.leg_at(y, z, x)[0])
+        return z1 + float(self.dz_levels[int(np.argmin(np.abs(self.dz_levels - (z - z1))))])
 
-    def leg_at(self, y: float):
-        """(leg number of the A leg whose y is nearest, |dy|)."""
+    def leg_at(self, y: float, z=None, x=None):
+        """(leg number of the A leg whose y is nearest, |dy|). Multi-layer with z and x: among the legs at that y,
+        the one whose planned offset is nearest to z - z_cmd(x)."""
         dy = np.abs(self.leg_ys - y)
-        i = int(np.argmin(dy))
+        if not self.ml or z is None or x is None:
+            i = int(np.argmin(dy))
+            return int(self.leg_ids[i]), float(dy[i])
+        same = np.flatnonzero(dy <= dy.min() + 1e-6)
+        dz = z - self.z_cmd(x)
+        i = int(same[np.argmin(np.abs(self.leg_dz[same] - dz))])
         return int(self.leg_ids[i]), float(dy[i])
+
+    def plane_dz(self, leg: int) -> float:
+        """Planned Z offset of an A leg above the layer-1 plane (0.0 for a single-layer pattern)."""
+        if not self.ml:
+            return 0.0
+        return float(self.leg_dz[int(np.flatnonzero(self.leg_ids == leg)[0])])
 
     def y_of(self, leg: int) -> float:
         return float(self.leg_ys[int(np.flatnonzero(self.leg_ids == leg)[0])])
@@ -207,10 +244,11 @@ def walk(p, nn, c0, level, direction, maxd=WALK_MAX):
     return np.nan
 
 
-def sample_chroma(rig, im: np.ndarray, tip) -> np.ndarray:
-    """Chroma (R-B)/(R+G+B) of a BGR image on the (d, n) bed grid behind the tip; NaN where the rig is not valid."""
+def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0) -> np.ndarray:
+    """Chroma (R-B)/(R+G+B) of a BGR image on the (d, n) bed grid behind the tip; NaN where the rig is not valid.
+    ``dz`` lifts the grid above the bed by the leg's planned layer offset (0.0 = single layer, bit-identical)."""
     gx, gy = tip[0] + S_GRID, tip[1] + N_GRID
-    uv, z = rig.project(np.stack([gx, gy, rig.bed_z(gx, gy)], -1), rig.Tcw_at(tip))
+    uv, z = rig.project(np.stack([gx, gy, rig.bed_z(gx, gy) + dz], -1), rig.Tcw_at(tip))
     ok = rig.valid(uv, z)
     m = cv2.remap(im, uv[..., 0].astype(np.float32), uv[..., 1].astype(np.float32),
                   cv2.INTER_LINEAR).astype(np.float32)
@@ -242,9 +280,9 @@ def rows_from_chroma(c: np.ndarray) -> np.ndarray:
     return out
 
 
-def frame_rows(rig, im: np.ndarray, tip) -> np.ndarray:
-    """(13, 7) array: d, w, ctr, con, mdf, core, fin per 1 mm d bin (d 12..25)."""
-    return rows_from_chroma(sample_chroma(rig, im, tip))
+def frame_rows(rig, im: np.ndarray, tip, dz: float = 0.0) -> np.ndarray:
+    """(13, 7) array: d, w, ctr, con, mdf, core, fin per 1 mm d bin (d 12..25); readout plane lifted by dz."""
+    return rows_from_chroma(sample_chroma(rig, im, tip, dz))
 
 
 @dataclass
@@ -252,6 +290,7 @@ class Gate:
     tip: np.ndarray
     leg: int
     s_tip: float
+    dz: float = 0.0     # planned layer offset of the leg (readout plane lift); 0.0 on single-layer patterns
 
 
 @dataclass
@@ -285,10 +324,10 @@ class RtReadout:
             return None
         tip, back = tr[0], tr[1]
         pat = self.pat
-        if abs(tip[2] - pat.z_cmd(tip[0])) > 0.5 or tip[0] - back[0] > -0.3:
+        if abs(tip[2] - pat.z_cmd(tip[0], tip[2], tip[1])) > 0.5 or tip[0] - back[0] > -0.3:   # the A leg's layer
             self.last_skip = "z_or_dir"
             return None
-        leg, dy = pat.leg_at(tip[1])
+        leg, dy = pat.leg_at(tip[1], tip[2], tip[0])                                    # the leg of that layer
         if dy > 1.0 or not (pat.xwin[0] <= tip[0] <= pat.xwin[1]):
             self.last_skip = "leg_or_xwin"
             return None
@@ -296,11 +335,11 @@ class RtReadout:
         if s_tip < pat.min_s_tip:
             self.last_skip = "min_s_tip"
             return None
-        return Gate(tip, leg, s_tip)
+        return Gate(tip, leg, s_tip, pat.plane_dz(leg))
 
     def read(self, im: np.ndarray, g: Gate, t_frame: float, frame_idx: int) -> Optional[Readout]:
         t0 = time.perf_counter()
-        r = frame_rows(self.rig, im, g.tip)
+        r = frame_rows(self.rig, im, g.tip, g.dz)
         s_dep = g.s_tip - r[:, 0]
         keep = s_dep >= 0.5
         rows = np.column_stack([r[:, 0], s_dep, r[:, 1:]])[keep]

@@ -67,6 +67,11 @@ class ControllerNode(Node):
             f"plan {law_cfg.plan} order {' -> '.join(self.ctrl.law.order)} -> model; pattern {pj.name}; "
             f"ov_base {cfg.ov_base:.2f}, ov_default {cfg.ov_default}, window {cfg.ov_min}..{cfg.ov_max} "
             f"(speed floor {cfg.ov_floor}); mode {p['mode']}")
+        if pat.ml:
+            self.get_logger().warning(
+                "multi-layer pattern: wall stop rule " + (
+                    f"OvCmd {cfg.ov_max} for {cfg.sat_s:g} s on a seen leg of layer >= 2 -> forced open loop "
+                    f"(OvCmd {cfg.ov_default})" if cfg.sat_s > 0 else "OFF (sat_stop_s 0)"))
         self.lockstep = bool(p["lockstep"])
         if self.lockstep:
             self._init_lockstep()

@@ -1,8 +1,11 @@
 """ROS parameters of the controller node = the legacy run_cl.py arguments, with the same defaults.
 
 Where run_cl.py has `default=None` ("use the CtrlCfg / LawCfg value"), the parameter default is that effective value.
-Where None means "derived" or "not given", the parameter uses an explicit sentinel (0.0 or ""), noted in the help.
+Where None means "derived" or "not given", the parameter uses an explicit sentinel (0.0, -1 or ""), noted in the help.
 `build_configs` reproduces run_cl.main + build_law_cfg + speed_rules on a plain dict, without ROS.
+
+`control_sources` and `sat_stop_s` are the two arguments the multi-layer (walls) run_cl.py adds
+(legacy/realtime_cl_261023_ml); with a single-layer pattern they change nothing unless control_sources is given.
 
 run_cl.py arguments that configure other nodes (cameras, recorder, readout, bridge) are listed in NOT_HERE.
 """
@@ -50,6 +53,11 @@ PARAMS: Dict[str, Tuple[object, str]] = {
     "guard_bed": (True, "G4: hold u while bore1 controls and the ELP sees no bead"),
     "target_schedule": ("const", "const | midleg | perleg"),
     "speed_check": ("latch", "latch | alarm | off"),
+    "control_sources": ("", "sources allowed to steer, comma separated (walls: elp, the bore1 head is a layer-1 "
+                            "model and stays in shadow); empty = elp and bore1"),
+    "sat_stop_s": (-1.0, "wall stop rule: on a seen leg of layer >= 2, OvCmd from the feedback at ov_max for this "
+                         "many s in a row -> forced open loop, latched. -1 = derived: 2.0 on wall patterns (segs csv "
+                         "with a z_off column), off otherwise; 0 = off. Single-layer patterns: always off"),
 }
 
 # Node-only parameters (not in run_cl.py).
@@ -94,6 +102,8 @@ def build_law_cfg(p: dict) -> LawCfg:
     lc.tau_slow, lc.tau_model, lc.start_mix = float(p["tau_slow"]), float(p["tau_model"]), float(p["start_mix"])
     lc.guard_bed, lc.tgt_schedule = bool(p["guard_bed"]), p["target_schedule"]
     lc.blind_tau, lc.blind_ref, lc.blind_dir = float(p["blind_tau"]), p["blind_ref"], p["blind_dir"]
+    if str(p["control_sources"]).strip():
+        lc.sources = str(p["control_sources"])
     if p["force_seg"]:
         fs = {}
         for part in str(p["force_seg"]).split(","):
@@ -134,4 +144,8 @@ def build_configs(p: dict, pat: Pattern):
         cfg.v_min_mm_s = 0.0
     ov_base = float(p["ov_base"]) or None
     plateaus = apply_speed_rules(cfg, law_cfg, pat, mode, ov_base)
+    sat = float(p["sat_stop_s"])
+    cfg.sat_s = (2.0 if sat == -1.0 else sat) if pat.ml else 0.0      # legacy _ml run_cl: wall patterns only
+    if not (math.isfinite(cfg.sat_s) and cfg.sat_s >= 0):
+        raise Refused(f"sat_stop_s {cfg.sat_s} (need >= 0, or -1 for the default)")
     return cfg, law_cfg, plateaus

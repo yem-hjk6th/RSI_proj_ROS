@@ -27,7 +27,7 @@ the legacy code. The controller-side files are templates marked `NOT RUN`.
 | `krc_interfaces` | Messages: `KrcState`, `OverrideCmd`, `Width`, `ReplyRecord`, `CtrlRecord`, `Bore1Record` (`docs/DESIGN.md` §5). |
 | `krc_rsi_bridge` | RSI UDP server with its 4 ms reply loop in its own process; clamp, speed floor, heartbeat watchdog and fallback ramp. |
 | `krc_sim` | Fake KR C4 RSI client: 4 ms packets, motion along a pattern at the replied override, late-reply counting with the RSI Timeout, replay of RSI logs. |
-| `cl_controller` | The v3 control law as a pure library, and a node: `Width` + `KrcState` → `OverrideCmd`. |
+| `cl_controller` | The v3 control law as a pure library, and a node: `Width` + `KrcState` → `OverrideCmd`. Also the multi-layer wall programs (`W4L28_*`). |
 | `width_readout_elp` | ELP chroma-edge bead-width readout: image + `KrcState` → `Width`. |
 | `width_readout_bore1` | bore1 width readout with the learned head (torch; weights not in this repository) or a replay of logged head outputs: image + `KrcState` → `Width`, `Bore1Record`. |
 | `krc_eki_bridge` | The same topics over EthernetKRL TCP (route C); KRL/XML templates marked `NOT RUN`. |
@@ -76,6 +76,9 @@ tests skip themselves without a sourced workspace.
   fixtures. The ports must reproduce them: the control law's override sequence of E1 exactly (`cl_controller`), the
   ELP readout rows (`width_readout_elp`), the bridge's reply loop and path speed (`krc_rsi_bridge`), and the legacy
   eval on exported logs (`print_session`).
+- **Synthetic golden of the wall programs** (`cl_controller`). No wall session is logged: the legacy multi-layer
+  modules (`legacy/realtime_cl_261023_ml/`) and the port run closed loop on the same `krc_sim` run of `W4L28_CL` with
+  synthetic widths and must agree on every gate decision and OvCmd.
 - **Replay** (`krc_replay`). E1 through the ROS graph: lock-step equivalence of the nodes with the library ports, and a
   real-time chain (`krc_sim` → bridge → controller → bridge) over a 59 s slice of the session, with a heartbeat-loss
   case. The whole session runs in the manual workflow `replay-full`.

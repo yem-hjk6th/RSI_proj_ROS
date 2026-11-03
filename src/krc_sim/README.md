@@ -4,6 +4,9 @@ Fake KUKA KR C4 RSI client, so the bridge can be tested without hardware.
 
 - Sends one packet every `period_s` (4 ms). The format is the legacy fake controller's (`legacy/realtime_cl_261023/harness_run_cl.py`), following the SEND section of `legacy/krc_config/rsi/RSI_EthernetConfig.xml`.
 - `pattern` mode: the TCP moves along a pattern json (`patterns/`, copied from `legacy/realtime_cl_261023/pattern/`) at `v100_mm_s` × override / 100.
+  - Z follows the json's `z_cmd` line, or, when the segs csv has the planned Z columns `z0, z1` (the wall programs
+    `usr_ELP_W4L28_*` in `cl_controller/patterns/`), those: every layer with its -X and +X passes, and the lifts
+    between layers (T12). `PatternPath.row` is the segs csv row of the current segment.
   - The override is the last on-time reply's `OvCmd`, limited to 1..100.
   - A reply without `OvCmd` gives 1 %, as noted in the KRL program header.
 - `replay` mode: streams a recorded `rsi_data_*.csv(.gz)`.

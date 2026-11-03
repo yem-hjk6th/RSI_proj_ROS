@@ -8,3 +8,5 @@ if str(PKG) not in sys.path:
     sys.path.append(str(PKG))
 PATTERN = PKG / "patterns" / "pattern_usr_ELP_R1v30_CLp_261022.json"
 E1_RSI = PKG.parents[1] / "data" / "e1_20261022_165128" / "roboter" / "rsi_data_20261022_165128.csv.gz"
+# T12: the wall programs (multi-layer variant of the legacy pipeline)
+WALL_PATTERN = PKG.parents[1] / "legacy" / "realtime_cl_261023_ml" / "pattern" / "pattern_usr_ELP_W4L28_CL_261023.json"

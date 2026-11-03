@@ -54,6 +54,11 @@ class WidthReadoutElp(Node):
         self.create_subscription(Image, image_topic, self.on_image, image_qos,
                                  callback_group=MutuallyExclusiveCallbackGroup())
         self.get_logger().info(f"{self.camera}: {image_topic} + {state_topic} -> {width_topic} (rig {rig})")
+        pat = self.readout.pat
+        if pat.ml:
+            self.get_logger().warning(
+                f"multi-layer pattern {pat.src}: {len(pat.leg_ids)} A legs on {len(pat.dz_levels)} planned offsets "
+                f"(0..{float(pat.dz_levels.max()):g} mm); the gate takes the layer's leg, the plane is lifted by it")
 
     def on_state(self, msg: KrcState) -> None:
         self.ring.push(_sec(msg.stamp), msg.rist[:3])
