@@ -1,0 +1,23 @@
+{
+  "_comment": "realtime_cl_261022 make_segs_261022.py: = pattern_usr_ELP_R1v12_CL_261021.json (same geometry, z_cmd, window) with segs of usr_ELP_R1v40_OL_261022; v_mm_s = speed at OvCmd ov_ref 30 (12 on kind A / B), v100_mm_s = speed at OvCmd 100; V_max 40 mm/s -> run_cl derives ov_base = 1200 / V_max",
+  "src": "usr_ELP_R1v40_OL_261022",
+  "segs": "usr_ELP_R1v40_OL_261022_segs.csv",
+  "z_cmd": {
+    "x0_z0": [
+      600.0,
+      0.8
+    ],
+    "x1_z1": [
+      970.0,
+      2.3
+    ]
+  },
+  "x_start": 945.0,
+  "x_window": [
+    765.0,
+    950.0
+  ],
+  "min_s_tip": 9.0,
+  "ov_ref": 30.0,
+  "v_max_mm_s": 40.0
+}

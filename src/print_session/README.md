@@ -18,8 +18,9 @@ python3 legacy/realtime_cl_261023/eval_v3_print.py --data exported --session <se
 > uses `RSI_OV4` (`RSI_CREATE("RSI_OV4.rsi")`) the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and the
 > robot runs at 1 % override (`legacy/README.md`; `legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). The lab's
 > print programs load `RSI_OV4`, so do not use shadow mode there; for a run that computes and logs everything without
-> acting, use `mode:=closed` with plan `Bpp`. The bringup logs this as a warning at start-up, and the session node
-> logs it again as a `WARN` line (`startup.SHADOW_WARNING`).
+> acting, use `mode:=closed` with plan `Bpp`. The bringup refuses shadow mode unless `print_session.krc_rsi_config` is
+> `RSI_MIN` (default `RSI_OV4`). With `RSI_MIN` it logs this as a warning at start-up, and the session node logs it
+> again as a `WARN` line (`startup.SHADOW_WARNING`).
 
 ## Bringup (`launch/bringup.launch.py`)
 

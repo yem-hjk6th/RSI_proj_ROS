@@ -84,3 +84,4 @@ print_session:
     disconnect_timeout_s: 2.0  # E1 session_meta rsi.disconnect_timeout_s
     src_name: usr_ELP_R1v30_CLp_261022.src   # the program E1 ran (session_meta src_name)
     ceiling_light: "on"        # E1 session_meta ceiling_light
+    krc_rsi_config: RSI_OV4    # the RSI configuration the program loads; shadow mode is refused unless RSI_MIN

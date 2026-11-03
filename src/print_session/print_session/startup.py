@@ -7,6 +7,7 @@ bridge's decider; the PR description lists every one with its run_cl.py line):
 - a plan whose order or force_seg uses bore1 needs a bore1 readout         run_cl.py:621, 692-695
   (no bore1 readout and a plan that does not need it: warning)              run_cl.py:696-697
 - the step test's limit_probe is refused (the bridge does not port it: it sent an unclamped value)  run_cl.py:352-355
+- shadow mode is refused unless print_session.krc_rsi_config is RSI_MIN (on RSI_OV4 it is 1 % override)
 ROS-only checks (no run_cl.py counterpart, they keep the separate nodes consistent):
 - the bridge, the readout and the controller use the same pattern file;
 - the bridge's effective window (floor included) equals the controller's;
@@ -40,6 +41,7 @@ SESSION_PARAMS = dict(
     disconnect_timeout_s=2.0,   # end the session this long after the last RSI packet (E1 session_meta rsi block)
     src_name="",                # the .src running on the KRC (run_cl --src-name), written to session_meta
     ceiling_light="",           # on | off | "" (run_cl --ceiling-light), written to session_meta
+    krc_rsi_config="RSI_OV4",   # the RSI configuration the KRC program loads (RSI_CREATE); shadow mode needs RSI_MIN
 )
 
 
@@ -159,6 +161,9 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
     cfg, law_cfg, plateaus = build_configs(cl, pat)
     sess = {**SESSION_PARAMS, **params.get(SESSION, {})}
     log: List[str] = [SHADOW_WARNING] if mode == "shadow" else []
+    if mode == "shadow" and sess["krc_rsi_config"] != "RSI_MIN":
+        raise Refused(f"mode shadow with {SESSION}.krc_rsi_config {sess['krc_rsi_config']!r}: shadow mode needs an RSI "
+                      f"configuration without an OvCmd input (RSI_MIN). " + SHADOW_WARNING)
 
     # ---- run_cl.main refusals that no node does
     if mode != "step" and not image_topic:

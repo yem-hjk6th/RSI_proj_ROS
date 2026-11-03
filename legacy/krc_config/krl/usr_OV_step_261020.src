@@ -1,0 +1,121 @@
+&ACCESS RVP
+&REL 1
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF usr_OV_step_261020 ( )
+;==========================================================================
+; usr_OV_step_261020 - line D (<HOST> 5080) 2026-10-20. NOT RUN ON HARDWARE YET.
+; SOURCE: usr_OV_step_261019.src (A3/A4/A6 10-19). Path = usr_ELP_C12_261018.src L40-L80
+;   coordinates verbatim; exit points (1025, -467, ..) as on 10-19.
+; PURPOSE: override step test incl. the new LIMIT, AIR WALK, NO EXTRUSION, T1 first.
+; ROUTE: RSI only. The PC (realtime_cl_261020/run_cl.py --mode step) sends OvCmd in EVERY
+;   reply; RSI_OV4.rsi runs ETHERNET1 Out7 -> LIMIT1 (1..100) -> MAP2OV_PRO1 -> $OV_PRO.
+; DIFFERENCES vs usr_OV_step_261019: RSI_CREATE("RSI_OV4.rsi"); print section $VEL.CP 0.024
+;   (= 12 mm/s x 2, so override 50 % = 12 mm/s, as the CL program's x 2).
+; PC SCHEDULE (run_cl.py decides from RIst): ov_outside until the first print point
+;   (X 945, Y -530), then 6 s each: 50, 0, 100, 50, 28, 90, 50, 28, 90, then 50 to the last
+;   point (X 945, Y -467). The PC clamps every value to its window: A3 runs with the window
+;   0..100 (0 and 100 reach the KRC raw: LIMIT must show them as 1 and 100; outside 40);
+;   A4 runs with the print window 28..90 (0 -> 28, 100 -> 90; outside 100 -> 90).
+; PREDICTED (RSI log Override column within 0.1 s; speed = d(RIst)/dt on straight runs):
+;   50 -> 12.0, 1 -> 0.24 (robot nearly stops 6 s), 100 -> 24.0, 28 -> 6.72, 90 -> 21.6 mm/s;
+;   outside: descent / wipe-in 12 mm/s x override / 100.
+; THE PENDANT OVERRIDE SLIDER IS OVERWRITTEN EVERY 4 ms FROM RSI_ON TO RSI_OFF. Slow down by
+;   STOP. After a CANCEL or RSI error stop $OV_PRO stays at the last PC value: check POV.
+;==========================================================================
+;VARIABLE DECLARATIONS (moved here from the .dat, laptop 10-19; copy the .src only)
+DECL INT OV_SAVED
+DECL INT ret
+DECL INT CONTID
+
+;FOLD INI
+BAS (#INITMOV,0 )
+;BASE IS 0, TOOL IS 3, FIXED START POS
+BAS(#TOOL, 3)
+BAS(#BASE, 0)
+BAS(#VEL_PTP, 10)
+PDAT_ACT.ACC = 50
+PDAT_ACT.APO_DIST = 50
+$BWDSTART = TRUE
+$VEL.CP=0.2
+$ADVANCE=3
+;ENDFOLD (INI)
+
+OV_SAVED=$OV_PRO
+
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+;NO EXTRUSION IN THIS TEST
+PelletExtruderRPM = 0
+TrimRPM = 0.0
+
+;RSI INI
+ret = RSI_CREATE("RSI_OV4.rsi", CONTID, TRUE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+ret = RSI_ON(#RELATIVE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+PTP {X 1025.0, Y -530.0, Z 60, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0, S 'B110'} C_PTP
+$VEL.CP=0.012
+LIN {X 1025.0, Y -530.0, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -530.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+
+;PRINT SECTION: 0.024 = 0.012 x 2
+$VEL.CP=0.024
+LIN {X 935.8, Y -530.0, Z 2.16, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 926.6, Y -530.0, Z 2.12, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 917.4, Y -530.0, Z 2.09, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 908.2, Y -530.0, Z 2.05, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 898.9, Y -530.0, Z 2.01, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 889.7, Y -530.0, Z 1.97, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 880.5, Y -530.0, Z 1.94, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 871.3, Y -530.0, Z 1.90, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 862.1, Y -530.0, Z 1.86, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 852.9, Y -530.0, Z 1.83, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 843.7, Y -530.0, Z 1.79, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 834.5, Y -530.0, Z 1.75, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 825.3, Y -530.0, Z 1.71, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 816.1, Y -530.0, Z 1.68, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 806.8, Y -530.0, Z 1.64, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 797.6, Y -530.0, Z 1.60, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 788.4, Y -530.0, Z 1.56, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 779.2, Y -530.0, Z 1.53, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -530.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -515.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -515.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -500.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 930.0, Y -500.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 890.0, Y -500.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 850.0, Y -500.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 810.0, Y -500.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -500.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -491.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -491.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -476.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 930.0, Y -476.0, Z 2.14, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 890.0, Y -476.0, Z 1.98, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 850.0, Y -476.0, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 810.0, Y -476.0, Z 1.65, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -476.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 770.0, Y -467.0, Z 1.49, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -467.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0}
+
+;ADVANCE STOP: LAST BLOCK DONE. RSI_OFF, THEN RESTORE THE PENDANT OVERRIDE (RSI_OFF DOES NOT)
+WAIT SEC 0
+ret = RSI_OFF()
+$OV_PRO=OV_SAVED
+
+;EXIT (NEW POINTS, SEE HEADER), LIFT 60, TRAVEL HIGH, HOME
+$VEL.CP=0.012
+LIN {X 1025.0, Y -467.0, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 1025.0, Y -467.0, Z 62.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.03
+LIN {X 847.5, Y -530.0, Z 61.80, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+END

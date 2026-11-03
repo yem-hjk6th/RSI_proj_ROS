@@ -128,7 +128,8 @@ See `CLAUDE.md`. In short:
 On hardware, the first runs are: replay, then an air step test, then an open-loop print (`closed` with plan `Bpp`:
 everything computed and logged, constant OvCmd), then closed-loop printing. **Shadow mode is not for the lab
 controller:** its reply carries no OvCmd, and the lab's print programs load `RSI_OV4`, where the missing input becomes
-0, which `LIMIT1` (1..100) raises to 1 % override (`legacy/README.md`).
+0, which `LIMIT1` (1..100) raises to 1 % override (`legacy/README.md`). `print_session` refuses shadow mode unless
+`print_session.krc_rsi_config` is `RSI_MIN`.
 
 ## 7. Tests
 
