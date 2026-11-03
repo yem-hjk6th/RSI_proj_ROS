@@ -1,4 +1,5 @@
 """Acceptance test 5: preview decimation and image stamps (monotonic, capture time); the capture loop."""
+import math
 import time
 
 import numpy as np
@@ -24,6 +25,24 @@ def test_decimator_gives_5_hz_for_any_faster_input(fps):
     assert np.mean(np.diff(passed)) == pytest.approx(0.2, abs=0.01)
 
 
+@pytest.mark.parametrize("fps", [78.4, 40.0, 30.0])
+@pytest.mark.parametrize("offset", [0.0, 0.07, 0.1, 0.199])
+def test_anchored_decimator_passes_only_first_frames_of_periods(fps, offset):
+    """The camera node's decimator: no pass for the first, partial period; every pass is the first frame of its
+    period, so every gap, the first one included, is above one period minus one frame interval."""
+    d = Decimator(5.0, anchored=True)
+    t0 = 1792702390.0 + offset                                          # the start falls anywhere in a period
+    ts = [t0 + k / fps for k in range(int(20 * fps))]
+    passed = [t for t in ts if d.take(t)]
+    slot = lambda t: math.floor(t / d.period)                           # noqa: E731 - the decimator's own rule
+    assert slot(passed[0]) == slot(ts[0]) + 1                           # from the first boundary on
+    assert abs(len(passed) - 100) <= 1
+    # 1e-6: float64 resolves about 2.4e-7 s at epoch-sized times
+    assert all(b - a > 0.2 - 1.0 / fps - 1e-6 for a, b in zip(passed, passed[1:]))
+    first = {slot(t): t for t in reversed(ts)}                          # first frame of every period
+    assert all(first[slot(t)] == t for t in passed)
+
+
 def test_decimator_passes_every_frame_below_the_rate():
     d = Decimator(5.0)
     ts = [100.0 + k / 3.0 for k in range(30)]
@@ -37,10 +56,12 @@ def test_synthetic_buffer_times_keep_the_schedule_when_read_late():
     src.open()
     ts = [src.read()[2] for _ in range(3)]
     time.sleep(0.2)                                                     # the reader stalls for 8 frame periods
-    t_read = time.monotonic()
-    ts += [src.read()[2] for _ in range(10)]                            # the backlog comes at once
-    assert time.monotonic() - t_read < 0.05
-    assert np.allclose(np.diff(ts), 1 / 40.0, rtol=0, atol=1e-9)
+    ages = []
+    for _ in range(10):
+        ts.append(src.read()[2])
+        ages.append(time.monotonic() - ts[-1])
+    assert ages[0] > 0.1                                                # read long after its capture time ...
+    assert np.allclose(np.diff(ts), 1 / 40.0, rtol=0, atol=1e-9)       # ... and still stamped on the schedule
 
 
 def test_preview_is_chosen_on_the_capture_thread(tmp_path):
