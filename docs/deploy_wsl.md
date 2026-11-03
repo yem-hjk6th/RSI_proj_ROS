@@ -365,7 +365,8 @@ On one host (as CI does), give the bridge `host:=127.0.0.1` and the simulator `-
 In shadow mode the bridge's reply carries no `<OvCmd>`. The lab's print programs load `RSI_OV4`
 (`RSI_CREATE("RSI_OV4.rsi")`), where OvCmd goes through `LIMIT1` (1..100) to `$OV_PRO`. With no OvCmd the input is
 0, `LIMIT1` raises it to 1, and **the robot runs at 1 % override** (`legacy/README.md`;
-`legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). `print_session` logs this warning at start-up in shadow mode.
+`legacy/realtime_cl_261023/run_cl.py` lines 4 and 7). `print_session` refuses shadow mode unless
+`print_session.krc_rsi_config` is `RSI_MIN` (default `RSI_OV4`).
 For a run that computes and logs everything without acting, use `mode:=closed` with plan `Bpp` (constant OvCmd).
 
 ## 7. Observed on the lab laptop (2026-11-02)

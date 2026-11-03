@@ -1,11 +1,12 @@
 """Edge stack of one print session: RSI bridge, ELP readout, controller, recorder and the session node.
 
-    ros2 launch print_session bringup.launch.py mode:=shadow params_file:=config/e1.yaml
+    ros2 launch print_session bringup.launch.py mode:=step params_file:=<yaml>
     ros2 launch print_session bringup.launch.py mode:=closed params_file:=<yaml> image_topic:=/elp/image_raw \\
         start_camera:=true camera_params:=<usb_cam yaml>
 
 mode (shadow | closed | step) and params_file are required and have no default: since 261020 r2, run_cl.py refuses a
-missing --mode, because a forgotten mode used to mean 1 % override.
+missing --mode, because a forgotten mode used to mean 1 % override. Shadow mode is refused unless
+print_session.krc_rsi_config is RSI_MIN: the lab's print programs load RSI_OV4, where shadow means 1 % override.
 The start-up checks run before any node starts (print_session.startup). A refusal stops the launch with its reason.
 The session ends when RSI disconnects (or on Ctrl+C); the recorder is then stopped and the bag closed.
 Output: <out_dir>/<session>/session_meta.json and <out_dir>/<session>/bag (mcap).

@@ -24,6 +24,8 @@ def _params(**over):
 
 
 def _plan(mode="closed", image_topic="/elp/image_raw", **over):
+    if mode == "shadow":            # shadow needs the RSI_MIN declaration (test_shadow_refused_on_rsi_ov4)
+        over.setdefault("print_session__krc_rsi_config", "RSI_MIN")
     return plan(_params(**over), mode, image_topic, search=[CL_PATTERNS])
 
 
@@ -132,6 +134,15 @@ def test_no_bore1_warning_and_e1_with_bore1():
     q = _plan("closed", print_session__bore1_readout=True)
     assert q.realtime["law"]["plan"] == "A_b1" and not any("model only" in line for line in q.log)
     assert asdict(q)["session"]["bore1_readout"] is True
+
+
+def test_shadow_refused_on_rsi_ov4():
+    """Shadow mode is refused unless print_session.krc_rsi_config declares RSI_MIN (on RSI_OV4: 1 % override)."""
+    for over in ({}, dict(print_session__krc_rsi_config="RSI_OV4")):
+        with pytest.raises(Refused, match="RSI_MIN"):
+            plan(_params(cl_controller__plan="A", **over), "shadow", "/elp/image_raw", search=[CL_PATTERNS])
+    for mode in ("closed", "step"):
+        _plan(mode, cl_controller__plan="A")             # the declaration only matters in shadow mode
 
 
 def test_shadow_mode_warns_about_rsi_ov4():

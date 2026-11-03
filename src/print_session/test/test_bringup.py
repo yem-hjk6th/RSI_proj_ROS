@@ -44,6 +44,7 @@ def _params(tmp_path, port, **cl):
     y = yaml.safe_load(E1_YAML.read_text(encoding="utf-8"))
     y["cl_controller"]["ros__parameters"].update(cl)
     y["krc_rsi_bridge"]["ros__parameters"].update(host="127.0.0.1", port=port)
+    y["print_session"]["ros__parameters"]["krc_rsi_config"] = "RSI_MIN"   # krc_sim: shadow mode is allowed
     p = tmp_path / "params.yaml"
     p.write_text(yaml.safe_dump(y), encoding="utf-8")
     return p
@@ -79,6 +80,7 @@ def test_missing_mode_refuses(tmp_path):
 @pytest.mark.parametrize("args,needle", [
     (["mode:=fast"], "mode"),
     (["mode:=closed"], "bore1"),                       # config/e1.yaml as it is: plan A_b1, no bore1 readout
+    (["mode:=shadow"], "RSI_MIN"),                     # config/e1.yaml declares RSI_OV4: shadow is refused
 ])
 def test_bad_mode_or_refused_start(tmp_path, args, needle):
     proc = _launch(*args, f"params_file:={E1_YAML}", f"out_dir:={tmp_path}", "session:=x")

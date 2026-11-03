@@ -99,8 +99,8 @@ In this order, each step only after the previous one passed:
 
 **Do not use shadow mode on the lab controller.** In shadow mode the reply carries no OvCmd. The lab's print programs
 load `RSI_OV4`, where the OvCmd input is then 0, `LIMIT1` (1..100) raises it to 1, and **the robot runs at 1 %
-override**. `print_session` logs this warning at start-up. Shadow mode is only for an RSI configuration without an
-OvCmd input.
+override**. `print_session` refuses shadow mode unless `print_session.krc_rsi_config` is `RSI_MIN` (default
+`RSI_OV4`). Shadow mode is only for an RSI configuration without an OvCmd input.
 
 ## Safety
 
