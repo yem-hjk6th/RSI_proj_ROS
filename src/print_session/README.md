@@ -27,7 +27,7 @@ python3 legacy/realtime_cl_261023/eval_v3_print.py --data exported --session <se
 | Argument | Default | |
 |---|---|---|
 | `mode` | **required, no default** | `shadow` \| `closed` \| `step`. `run_cl.py` has refused a missing `--mode` since 261020 r2: a forgotten mode used to mean 1 % override. |
-| `params_file` | **required** | One YAML with a section per node: `krc_rsi_bridge`, `cl_controller`, `width_readout_elp`, `print_session`. `config/e1.yaml` is the example. |
+| `params_file` | **required** | One YAML with a section per node: `krc_rsi_bridge`, `cl_controller`, `width_readout_elp`, `print_session`, and `width_readout_bore1` when the bore1 readout runs. `config/e1.yaml` is the example. |
 | `image_topic` | `/elp/image_raw` | ELP image topic for the readout. |
 | `readout` | `true` | `false`: no ELP readout, which only `step` allows. (`image_topic:=` with an empty value is rejected by `ros2 launch` as a malformed argument, so it cannot switch the readout off.) |
 | `cameras` | – | `camera_capture` parameter YAML, one section per camera node (examples: `camera_capture/config/cameras_e1.yaml`, `cameras_cage.yaml`). See Camera. |
@@ -41,6 +41,7 @@ Nodes started:
 - `krc_rsi_bridge`
 - `cl_controller`
 - `width_readout_elp`
+- `width_readout_bore1`, when `print_session.bore1_readout` is true (see bore1 readout);
 - the recorder (`ros2 bag record`)
 - `print_session` (the session node)
 - one `camera_capture` node per section of the `cameras` file, or `usb_cam`, when asked;
@@ -57,6 +58,34 @@ The session ends 2 s (`print_session.disconnect_timeout_s`) after the last RSI p
 - the window tolerances, `step_seq`, `step_hold_s`, `tau_v`.
 
 In `run_cl.py` both sides shared one `CtrlCfg`. A different value in the `krc_rsi_bridge` section is refused. The bridge's effective window, speed floor included, must equal the controller's.
+
+## bore1 readout
+
+`print_session.bore1_readout: true` starts `width_readout_bore1` (task T11) with the section `width_readout_bore1` of
+the parameter file; the bringup sets its `pattern_json` (the controller's pattern) and `session_meta`. Plan `A_b1`
+(bore1 → ELP → model, E1's plan) and a `force_seg` with bore1 are refused without it (`run_cl.py:692-695`).
+
+```yaml
+width_readout_bore1:
+  ros__parameters:
+    head: torch
+    weight_dir: <BORE1_WEIGHT_DIR>       # cnxt_t_deploy_s0.pt .. s2.pt; not in this repository
+    image_topic: /bore1/image_raw
+    frame_time: receive                  # or header + header_offset_s, see width_readout_bore1/README.md
+```
+
+Refused before any node starts (`startup.bore1_check`): `head` other than `torch` / `replay`; `torch` without a
+`weight_dir` that holds the three seed files (the node checks their sha256 before it publishes anything); `replay`
+without a `replay_csv`; another `pattern_json` than the controller's; `lockstep`; and, with a `cameras` file, an
+`image_topic` that no camera publishes. The legacy `run_cl.py` loaded the head before RSI connected. Here the node loads
+it while the other nodes start (sha256 of 333 MB, three models, CUDA graph, warm-up: a few seconds; it logs
+`head torch ready in ... s`). Start the program on the KRC after that line. If the node ends while the session runs
+and the plan uses bore1, the bringup ends the session; for other plans (e.g. `A`, where bore1 is the fallback) the
+session goes on with ELP → model.
+
+The node writes `bore1_readout` into `session_meta.json` (head, frame time, frames, gate counts, predicted, pushed,
+errors, head time mean / p95 / max). Its records go into the bag (`/width/bore1/record`), and `bag_to_legacy` writes
+them as `raw_video/<ses>/bore1_rt_<ses>.csv`.
 
 ## Camera
 
@@ -109,7 +138,7 @@ formats (`camera_capture/README.md`, Recording). The bag holds no images.
 `ros2 bag record -s mcap --regex '^/(krc/(state|override_cmd|reply_record)|controller/ctrl_record|width/.+)$'` records:
 - `/krc/state`, `/krc/override_cmd`;
 - `/krc/reply_record` and `/controller/ctrl_record` (the two record topics);
-- `/width/*`.
+- `/width/*`: `/width/elp`, `/width/bore1` and `/width/bore1/record` (`Bore1Record`, one per processed bore1 frame).
 
 Images are not recorded.
 
@@ -121,11 +150,12 @@ Images are not recorded.
 
 ## Exporter (`bag_to_legacy`)
 
-It writes `roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv` and copies `session_meta.json` to `raw_video/<ses>/`. Column names and order come from:
+It writes `roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv`, `raw_video/<ses>/bore1_rt_<ses>.csv` when the bag has bore1 records, and copies `session_meta.json` to `raw_video/<ses>/`. Column names and order come from:
 - the E1 files (`rsi_data`, `ov_cmd`);
-- `CTRL_COLS`, `READOUT_COLS` and `ROWS_COLS` of `run_cl.py`.
+- `CTRL_COLS`, `READOUT_COLS` and `ROWS_COLS` of `run_cl.py`;
+- `B1_COLS` of `bore1/bore1_rt.py`.
 
-Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
+Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`, `Bore1Thread`).
 
 **Columns the topics cannot carry** (`legacy_cols.NOT_CARRIED`; the round-trip test checks that this list is complete):
 
@@ -139,6 +169,9 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
 | `readout` | (rows) | frames the readout gated out publish nothing, so they are not in the export |
 | `readout` | `w_med_used` | recomputed from the published rows |
 | `readout_rows` | `frame` | renumbered as in `readout` |
+| `bore1_rt` | `t_frame` | derived: `Bore1Record.stamp` minus the same offset as `readout.t_frame_perf` |
+| `bore1_rt` | `frame` | carried, but in a ROS session it is the node's count of processed frames, not the camera's frame index |
+| `bore1_rt` | (rows) | frames the node skipped while busy have no record, as in the legacy log |
 
 `eval_v3_print.py` uses only `frame` and `leg` from `readout`, so the renumbering does not change its result.
 
@@ -146,9 +179,13 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`).
 
 | Test | Acceptance |
 |---|---|
-| `test_roundtrip.py` | 1: E1 CSVs → bag (`test/e1_bag.py`, test-only writer) → export → every carried column equal to the original string. |
-| `test_eval_unchanged.py` | 2: the legacy eval on the original logs reproduces the stored eval JSON (keys that need inputs not in this repository are listed). On the exported logs it gives the same result. |
-| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter, the shadow-mode warning in the log). 4: the launch refuses without `mode`. T10: `readout:=false` in step mode with a `cameras` file of two synthetic cameras against `krc_sim` (no readout node; `raw_video/` CSVs 1:1 with the files, recording from the first RSI packet, the `cameras` blocks); the refusals of `readout:=false` outside step mode, of a non-boolean `readout` and of `cameras` with `start_camera`. |
+| `test_roundtrip.py` | 1: E1 CSVs → bag (`test/e1_bag.py`, test-only writer) → export → every carried column equal to the original string. T11 acceptance 4: the same for `bore1_rt` (only `t_frame` differs: derived). |
+| `test_eval_unchanged.py` | 2: the legacy eval on the original logs reproduces the stored eval JSON (keys that need inputs not in this repository are listed). On the exported logs, `bore1_rt` included, it gives the same result. |
+| `test_bringup.py` | 3: shadow bringup against `krc_sim` on loopback for 10 s (no OvCmd in the replies, bag, `session_meta.json`, exporter, the shadow-mode warning in the log). 4: the launch refuses without `mode`. T10: `readout:=false` in step mode with a `cameras` file of two synthetic cameras against `krc_sim` (no readout node; `raw_video/` CSVs 1:1 with the files, recording from the first RSI packet, the `cameras` blocks); the refusals of `readout:=false` outside step mode, of a non-boolean `readout` and of `cameras` with `start_camera`. T11: closed mode with plan `A_b1` and the bore1 readout (replay head on E1's log) against `krc_sim` with two synthetic cameras: records in the bag, `bore1_rt` exported, the node's `session_meta` block. |
 | `test_cameras.py` | The `cameras` file plan and its refusals; the example camera files keep the legacy profiles. |
-| `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only). |
+| `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only); the bore1 readout plan and its refusals. |
 | `test_export_unit.py` | Exporter formats and joins on hand-made messages. |
+
+The tests run on a ROS domain of their own (1–19, set in `test/conftest.py`; `PRINT_SESSION_ROS_DOMAIN_ID` overrides
+it): the bringup tests publish `/krc/state` through the bridge, which other packages' node tests running in parallel
+react to.

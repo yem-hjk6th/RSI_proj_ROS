@@ -3,8 +3,8 @@
     ros2 run print_session bag_to_legacy <session_dir>/bag --out <out_dir>
     python3 legacy/realtime_cl_261023/eval_v3_print.py --data <out_dir> --session <ses> --pattern <pattern json>
 
-Writes <out>/roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv and copies session_meta.json to
-<out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
+Writes <out>/roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv, <out>/raw_video/<ses>/bore1_rt_<ses>.csv
+when the bag has bore1 records, and copies session_meta.json to <out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
 """
 import argparse
 import json
@@ -23,6 +23,7 @@ def main(argv=None) -> int:
     ap.add_argument("--session", default=None, help="session name used in the file names")
     ap.add_argument("--meta", default=None, help="session_meta.json (default: next to the bag folder)")
     ap.add_argument("--elp-topic", default=T.WIDTH_ELP, help="Width topic of the ELP readout")
+    ap.add_argument("--bore1-topic", default=T.BORE1_RECORD, help="Bore1Record topic of the bore1 readout")
     a = ap.parse_args(argv)
     bag = Path(a.bag)
     meta = Path(a.meta) if a.meta else bag.parent / "session_meta.json"
@@ -31,10 +32,11 @@ def main(argv=None) -> int:
         ses = json.loads(meta.read_text(encoding="utf-8")).get("session_ts")
     ses = ses or bag.resolve().parent.name
     from .bag_io import read_bag
-    msgs = read_bag(bag, [T.STATE, T.REPLY, T.CTRL, a.elp_topic])
-    counts = export(msgs, a.out, ses, meta if meta.exists() else None, a.elp_topic)
+    msgs = read_bag(bag, [T.STATE, T.REPLY, T.CTRL, a.elp_topic, a.bore1_topic])
+    counts = export(msgs, a.out, ses, meta if meta.exists() else None, a.elp_topic, a.bore1_topic)
     for name, n in counts.items():
-        print(f"{n:8d} rows  {Path(a.out) / 'roboter' / ses / name}")
+        sub = "raw_video" if name.startswith("bore1_rt_") else "roboter"
+        print(f"{n:8d} rows  {Path(a.out) / sub / ses / name}")
     for f, cols in NOT_CARRIED.items():
         print(f"not carried by the topics ({f}): " + ", ".join(k for k in cols if not k.startswith("_")))
     return 0

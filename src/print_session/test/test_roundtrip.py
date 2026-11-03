@@ -13,16 +13,16 @@ import pytest
 
 from e1_paths import DATA, SES
 
-from print_session.legacy_cols import CTRL_COLS, NOT_CARRIED, OV_COLS, READOUT_COLS, ROWS_COLS, RSI_COLS
+from print_session.legacy_cols import B1_COLS, CTRL_COLS, NOT_CARRIED, OV_COLS, READOUT_COLS, ROWS_COLS, RSI_COLS
 
 
-def _orig(name):
-    with gzip.open(DATA / "roboter" / f"{name}_{SES}.csv.gz", "rt", encoding="utf-8") as f:
+def _orig(name, sub="roboter"):
+    with gzip.open(DATA / sub / f"{name}_{SES}.csv.gz", "rt", encoding="utf-8") as f:
         return pd.read_csv(f, dtype=str, keep_default_na=False)
 
 
-def _exp(out, name):
-    return pd.read_csv(out / "roboter" / SES / f"{name}_{SES}.csv", dtype=str, keep_default_na=False)
+def _exp(out, name, sub="roboter"):
+    return pd.read_csv(out / sub / SES / f"{name}_{SES}.csv", dtype=str, keep_default_na=False)
 
 
 def _differing(a: pd.DataFrame, b: pd.DataFrame):
@@ -82,8 +82,20 @@ def test_readout_rows(e1_export):
     assert (o.frame.map(renum).values == e.frame.values).all()   # the same rows under the new frame numbers
 
 
+def test_bore1_rt(e1_export):
+    """T11 acceptance test 4: bag -> bore1_rt csv, every carried column equal to the original string."""
+    _, out, _ = e1_export
+    o, e = _orig("bore1_rt", "raw_video"), _exp(out, "bore1_rt", "raw_video")
+    assert list(e.columns) == B1_COLS == list(o.columns)
+    assert len(e) == len(o) == 12878
+    assert _differing(o, e) == {k for k in NOT_CARRIED["bore1_rt"] if not k.startswith("_")} == {"t_frame"}
+    t = e.t_frame.astype(float) - o.t_frame.astype(float)
+    assert t.abs().max() < 0.05                                  # derived from the wall stamp: close, not equal
+    assert (e.gate == "ok").sum() == 5382 and (e.pushed == "1").sum() == 5092
+
+
 def test_not_carried_list_is_complete():
-    assert set(NOT_CARRIED) == {"rsi_data", "readout", "readout_rows"}
+    assert set(NOT_CARRIED) == {"rsi_data", "readout", "readout_rows", "bore1_rt"}
     for v in NOT_CARRIED.values():
         assert all(isinstance(t, str) and t for t in v.values())
 
@@ -93,3 +105,4 @@ def test_meta_copied_and_files_present(e1_export, name):
     _, out, _ = e1_export
     assert (out / "roboter" / SES / f"{name}_{SES}.csv").exists()
     assert (out / "raw_video" / SES / "session_meta.json").exists()
+    assert (out / "raw_video" / SES / f"bore1_rt_{SES}.csv").exists()

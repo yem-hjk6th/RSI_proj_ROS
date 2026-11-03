@@ -6,6 +6,7 @@ find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/Bore1Record.msg"
   "msg/KrcState.msg"
   "msg/CtrlRecord.msg"
   "msg/OverrideCmd.msg"

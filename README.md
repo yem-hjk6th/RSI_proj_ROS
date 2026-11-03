@@ -24,11 +24,12 @@ the legacy code. The controller-side files are templates marked `NOT RUN`.
 
 | Package | One line |
 |---|---|
-| `krc_interfaces` | Messages: `KrcState`, `OverrideCmd`, `Width`, `ReplyRecord`, `CtrlRecord` (`docs/DESIGN.md` §5). |
+| `krc_interfaces` | Messages: `KrcState`, `OverrideCmd`, `Width`, `ReplyRecord`, `CtrlRecord`, `Bore1Record` (`docs/DESIGN.md` §5). |
 | `krc_rsi_bridge` | RSI UDP server with its 4 ms reply loop in its own process; clamp, speed floor, heartbeat watchdog and fallback ramp. |
 | `krc_sim` | Fake KR C4 RSI client: 4 ms packets, motion along a pattern at the replied override, late-reply counting with the RSI Timeout, replay of RSI logs. |
 | `cl_controller` | The v3 control law as a pure library, and a node: `Width` + `KrcState` → `OverrideCmd`. |
 | `width_readout_elp` | ELP chroma-edge bead-width readout: image + `KrcState` → `Width`. |
+| `width_readout_bore1` | bore1 width readout with the learned head (torch; weights not in this repository) or a replay of logged head outputs: image + `KrcState` → `Width`, `Bore1Record`. |
 | `krc_eki_bridge` | The same topics over EthernetKRL TCP (route C); KRL/XML templates marked `NOT RUN`. |
 | `krc_replay` | End-to-end replay of a logged session through the ROS graph, and the RSI link latency test. |
 | `print_session` | One launch command for a print session: start-up checks, `session_meta.json`, rosbag2 recording, export to the legacy logs. |

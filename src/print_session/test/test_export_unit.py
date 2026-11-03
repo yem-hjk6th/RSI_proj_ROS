@@ -67,3 +67,32 @@ def test_export_writes_five_files(tmp_path):
                       "readout_rows_s1.csv": 1}
     with open(tmp_path / "roboter" / "s1" / "readout_s1.csv", newline="") as f:
         assert next(csv.reader(f))[0] == "frame"
+    assert not (tmp_path / "raw_video" / "s1" / "bore1_rt_s1.csv").exists()     # no bore1 records, no file
+
+
+def _b1(frame, t, gate="ok", t_done=7.3, **kw):
+    nan = math.nan
+    v = dict(leg=-1, q_ok=-1, pushed=-1, **{c: nan for c in ("s_tip", "s_dep", "x", "y", "z", "w", "w_s0", "w_s1",
+                                                             "w_s2", "sd", "bright", "sat", "sharp", "diff", "ms")})
+    if gate == "ok":
+        v.update(leg=2, s_tip=10.123456, s_dep=5.123456, x=934.876544, y=-470.0, z=2.1, w=6.49434, w_s0=6.55878,
+                 w_s1=6.47231, w_s2=6.45172, sd=0.04641, q_ok=1, bright=116.1749, sat=0.0, sharp=11.34, diff=math.nan,
+                 ms=47.951, pushed=1)
+    v.update(kw)
+    return NS(stamp=_t(t), frame=frame, t_done=t_done, gate=gate, **v)
+
+
+def test_bore1_rows_legacy_format(tmp_path):
+    from print_session.export import bore1_rows
+    from print_session.legacy_cols import B1_COLS
+    rows = bore1_rows([_b1(2, 100.5, "z_or_dir", t_done=7.31), _b1(1, 100.48, q_ok=0, pushed=0)], offset=93.25)
+    assert rows[0] == [1, "7.230000", "7.300000", "ok", 2, "10.123", "5.123", "934.877", "-470.000", "2.100", "6.4943",
+                       "6.5588", "6.4723", "6.4517", "0.0464", 0, "116.17", "0.0000", "11.3", "nan", "47.95", 0]
+    assert rows[1] == [2, "7.250000", "7.310000", "z_or_dir"] + [""] * 18          # in frame order
+    assert bore1_rows([_b1(1, 100.5)], offset=None)[0][1] == ""                  # no RSI: t_frame unknown
+    msgs = {T.STATE: [_state(4, 100.5)], T.REPLY: [_reply(4, 7.25)], T.BORE1_RECORD: [_b1(1, 100.48)]}
+    counts = export(msgs, tmp_path, "s1")
+    assert counts["bore1_rt_s1.csv"] == 1
+    with open(tmp_path / "raw_video" / "s1" / "bore1_rt_s1.csv", newline="") as f:
+        r = list(csv.reader(f))
+    assert r[0] == B1_COLS and r[1][:4] == ["1", "7.230000", "7.300000", "ok"]

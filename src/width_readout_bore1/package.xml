@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>width_readout_bore1</name>
+  <version>0.1.0</version>
+  <description>bore1 bead-width readout: borescope image + KrcState -> Width, with the learned head (torch, weights not in this repository) or a replay of logged head outputs (port of the legacy bore1 thread).</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>krc_interfaces</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <!-- Pattern, RsiRing and the image conversion of the ELP readout (ports of the same legacy classes) -->
+  <exec_depend>width_readout_elp</exec_depend>
+  <!-- the locked session_meta.json update -->
+  <exec_depend>camera_capture</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-pandas</exec_depend>
+  <!-- head: torch needs torch (CUDA build) and timm from pip (legacy bore1/requirements_bore1.txt); not rosdep keys -->
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
+  <test_depend>cl_controller</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

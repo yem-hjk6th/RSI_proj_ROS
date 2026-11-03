@@ -7,6 +7,8 @@ readout would put it; columns no topic carries are not written (they are listed 
 - readout + readout_rows -> Width on /width/elp: one per stored row, or one valid = false message for a frame the
   readout processed without a usable row (what width_readout_elp publishes); stamp = the frame's pc_ts_wall from
   raw_video/elp_frames (frames the readout gated out publish nothing)
+- raw_video bore1_rt -> Bore1Record on /width/bore1/record, one per row (what width_readout_bore1 publishes); stamp =
+  the frame's pc_ts_wall from raw_video/borescope_frames, frame = the logged frame index; empty cells -> NaN / -1
 Bag receive time = the message's wall time.
 """
 import math
@@ -35,7 +37,7 @@ def _fl(v: str) -> float:
 
 def e1_items():
     """(topic, message, t_ns) of E1, sorted by t_ns."""
-    from krc_interfaces.msg import CtrlRecord, KrcState, ReplyRecord, Width
+    from krc_interfaces.msg import Bore1Record, CtrlRecord, KrcState, ReplyRecord, Width
     items = []
     R, O = _csv("roboter", "rsi_data"), _csv("roboter", "ov_cmd")
     assert (R.ipoc.values == O.ipoc.values).all()
@@ -85,5 +87,15 @@ def e1_items():
         for d, s, w, ok in recs:
             m = Width(source="elp", leg=leg, s_mm=s, d_mm=d, s_tip_mm=_fl(s_tip), width_mm=w, valid=ok)
             items.append((T.WIDTH_ELP, m, _stamp(m, wall[fr])))
+    B = _csv("raw_video", "bore1_rt")
+    BF = pd.read_csv(DATA / "raw_video" / f"borescope_frames_{SES}.csv.gz", dtype=str)
+    wall = dict(zip(BF.frame_idx.astype(int), BF.pc_ts_wall.astype(float)))
+    tri = lambda v: -1 if v == "" else int(v)  # noqa: E731
+    for r in B.to_dict("records"):
+        m = Bore1Record(frame=int(r["frame"]), t_done=float(r["t_done"]), gate=r["gate"], leg=tri(r["leg"]),
+                        q_ok=tri(r["q_ok"]), pushed=tri(r["pushed"]),
+                        **{c: _fl(r[c]) for c in ("s_tip", "s_dep", "x", "y", "z", "w", "w_s0", "w_s1", "w_s2", "sd",
+                                                  "bright", "sat", "sharp", "diff", "ms")})
+        items.append((T.BORE1_RECORD, m, _stamp(m, wall[int(r["frame"])])))
     items.sort(key=lambda x: x[2])
     return items

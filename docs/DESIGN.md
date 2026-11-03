@@ -50,11 +50,11 @@ run on hardware. **planned** = not in the repository yet.
 | `krc_replay` | ament_python | – | End-to-end replay of a logged session through the ROS graph: `log_player` node (lock-step and real-time), equivalence and safety tests. Also the RSI link latency test (`latency_test` CLI, `latency_bridge.launch.py`). | implemented |
 | `print_session` | ament_python | `run_cl.py` | Session lifecycle: one bringup launch with the start-up checks and refusals of `run_cl.py`, `session_meta.json`, rosbag2 recording (mcap) of the record topics, `bag_to_legacy` export to the legacy CSV logs. Warns at start-up in shadow mode (no OvCmd: 1 % on `RSI_OV4`). | implemented |
 | `camera_capture` | ament_python | `pipeline_cage1012/elp.py`, `borescope.py`, `realtime_cl_261023/elp_hevc.py` | One node per camera (V4L2 by a stable device path, controls read back), recording in the same process (ELP: HEVC via `ffmpeg` `hevc_nvenc`, MJPG AVI fallback; borescopes: mp4v) with the legacy frame CSVs; image topics with capture-time stamps, 5 Hz previews, a 2×2 preview window | implemented (not run with a camera) |
-| `width_readout_bore1` | ament_python | `bore1/` | GPU head; weights are not in this repository | planned |
+| `width_readout_bore1` | ament_python | `bore1/bore1_rt.py`, `bore1/bore1_head.py` | bore1 readout: image + `KrcState` → `Width` and `Bore1Record`. Gate on the RSI track, head `torch` (the GPU head; weights are not in this repository, sha256 checked against a committed list) or `replay` (logged head outputs; CI) | implemented (not run with the weights or a GPU) |
 
 ## 5. Interfaces (contract; change only through a PR to `krc_interfaces`)
 
-All five messages are implemented.
+All six messages are implemented. `Bore1Record` was added by T11 (#27).
 
 **`KrcState.msg`**: one per RSI packet.
 - `builtin_interfaces/Time stamp` (PC receive time)
@@ -102,6 +102,12 @@ legacy log has an empty cell. Among its fields: `stamp`, `t_perf` (same clock as
 per-source validity and lag, the law terms (`e`, `du`, `u`, `lnk_*`) and the counters `n_corr`, `n_switch`. The full
 list is in `src/krc_interfaces/msg/CtrlRecord.msg`.
 
+**`Bore1Record.msg`**: one per bore1 frame processed by `width_readout_bore1`, also when the gate rejects it. A row
+of the legacy `bore1_rt_<ses>.csv` (`B1_COLS` of `bore1/bore1_rt.py`, same names and order; `t_frame` is the
+`stamp`), unrounded; NaN or -1 where the legacy log has an empty cell: `stamp` (frame time), `frame`, `t_done` (same
+clock as `ReplyRecord.pc_ts_perf`), `gate`, `leg`, `s_tip`, `s_dep`, `x`, `y`, `z`, the head outputs `w`, `w_s0..2`,
+`sd`, the quality terms `q_ok`, `bright`, `sat`, `sharp`, `diff`, the head time `ms` and `pushed`.
+
 **Topics**:
 
 | Topic | Type | Publisher | Status |
@@ -111,12 +117,13 @@ list is in `src/krc_interfaces/msg/CtrlRecord.msg`.
 | `/krc/reply_record` | `ReplyRecord` | `krc_rsi_bridge` | implemented |
 | `/controller/ctrl_record` | `CtrlRecord` | `cl_controller` | implemented |
 | `/width/elp` | `Width` | `width_readout_elp`, `log_player` | implemented |
-| `/width/bore1` | `Width` | `width_readout_bore1` (planned), `log_player` | replay only |
+| `/width/bore1` | `Width` | `width_readout_bore1`, `log_player` | implemented (not run with the weights) |
+| `/width/bore1/record` | `Bore1Record` | `width_readout_bore1` | implemented (not run with the weights) |
 | `/<camera>/image_raw` | `sensor_msgs/Image` (`bgr8`, stamp = capture time on the clock of `KrcState.stamp`) | `camera_capture` (`/elp/image_raw`, `/bore1/image_raw`, ...) | implemented |
 | `/<camera>/preview` | `sensor_msgs/Image` (5 Hz, 640 px wide) | `camera_capture` | implemented |
 
 `print_session` records `/krc/state`, `/krc/override_cmd`, `/krc/reply_record`, `/controller/ctrl_record` and
-`/width/*`. Images are not in the bag: the camera nodes record the video and the frame CSVs to
+`/width/*` (`/width/bore1/record` included). Images are not in the bag: the camera nodes record the video and the frame CSVs to
 `<session>/raw_video/` in the legacy formats.
 
 ## 6. Safety invariants
