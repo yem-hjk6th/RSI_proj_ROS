@@ -62,7 +62,8 @@ Before the gate the node waits up to `wait_s` (0.06 s, as the legacy thread) for
 time. A head that raises is logged and counted, and the frame publishes nothing (legacy: `errors`, no row).
 
 With `session_meta` set (the bringup sets it), the node writes a `bore1_readout` block (head, frame time, counts, head
-time mean / p95 / max: the legacy `bore1_shadow` summary) at start and at stop.
+time mean / p95 / max: the legacy `bore1_shadow` summary; and `receive_minus_stamp_ms`, the node's receive time minus
+the image stamp, for the frame-time check) at start and at stop.
 
 Parameters (defaults in `params.py`, example `config/width_readout_bore1.yaml`): `camera`, the four topics,
 `pattern_json` (empty = `width_readout_elp`'s packaged R1v30_CLp pattern), `root`, `head`, `weight_dir`,

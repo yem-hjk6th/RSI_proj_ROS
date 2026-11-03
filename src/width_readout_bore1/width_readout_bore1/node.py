@@ -12,7 +12,8 @@ Frame time (``frame_time``). The legacy frame time was the PC receive time of th
 takes the time the image reached this node; ``header`` takes ``header.stamp + header_offset_s``. camera_capture stamps
 the V4L2 capture time, which is earlier than the read by the camera's ``read_minus_capture_ms`` (its session_meta
 block); ``header`` with that offset is the legacy definition without the transport delay. Both are on the clock of
-``KrcState.stamp``.
+``KrcState.stamp``. In normal mode the node keeps receive time minus ``header.stamp`` of every image and writes its
+distribution into its session_meta block (``receive_minus_stamp_ms``), for that comparison.
 
 The state and image callbacks run in separate callback groups (the image callback may wait for the ring). The image
 subscription keeps the newest frame only (depth 1, best effort), so the head never falls behind the camera; frames that
@@ -100,6 +101,7 @@ class WidthReadoutBore1(Node):
             return
         self.wait_s = float(p["wait_s"])
         self.use_header = p["frame_time"] == "header"
+        self.recv_minus_stamp = []              # s, receive time - header.stamp of every image (lab check)
         state_qos = QoSProfile(depth=100, reliability=ReliabilityPolicy.RELIABLE, history=HistoryPolicy.KEEP_LAST)
         image_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST)
         self.create_subscription(KrcState, p["state_topic"], self.on_state, state_qos,
@@ -112,10 +114,11 @@ class WidthReadoutBore1(Node):
         self.ring.push(sec_of(msg.stamp), msg.rist[:3])
 
     def on_image(self, msg: Image) -> None:
-        if self.use_header:
-            t = sec_of(msg.header.stamp) + self.header_offset_s
-        else:
-            t = self.get_clock().now().nanoseconds * 1e-9
+        t_recv = self.get_clock().now().nanoseconds * 1e-9
+        t_stamp = sec_of(msg.header.stamp)
+        if len(self.recv_minus_stamp) < 200000:
+            self.recv_minus_stamp.append(t_recv - t_stamp)
+        t = t_stamp + self.header_offset_s if self.use_header else t_recv
         # the ring is filled by the state callback: wait (<= wait_s) for a packet at or after the frame time
         t_wait = time.monotonic() + self.wait_s
         while True:
@@ -197,10 +200,20 @@ class WidthReadoutBore1(Node):
                          header_offset_s=self.header_offset_s, wait_s=float(p["wait_s"]),
                          drop_bad_q=bool(p["drop_bad_q"]),
                          sd_max=None if math.isinf(float(p["sd_max"])) else float(p["sd_max"]),
-                         summary=self.readout.stats.summary())
+                         summary=self.readout.stats.summary(),
+                         receive_minus_stamp_ms=self._recv_stats())
             update_meta(path, "bore1_readout", block)
         except Exception as e:  # noqa: BLE001 - the meta file must never stop the readout
             self.get_logger().error(f"session_meta not written: {e!r}")
+
+    def _recv_stats(self):
+        """Receive time minus header.stamp of the images (ms): the capture-to-node delay when the stamp is the capture
+        time. Compare with camera_capture's read_minus_capture_ms to choose frame_time / header_offset_s."""
+        v = sorted(getattr(self, "recv_minus_stamp", []))
+        if not v:
+            return None
+        return dict(n=len(v), mean=round(1e3 * sum(v) / len(v), 3), p50=round(1e3 * v[len(v) // 2], 3),
+                    p95=round(1e3 * v[min(len(v) - 1, int(0.95 * len(v)))], 3), max=round(1e3 * v[-1], 3))
 
     def finish(self) -> None:
         s = self.readout.stats.summary()

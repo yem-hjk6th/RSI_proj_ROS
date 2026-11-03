@@ -244,6 +244,8 @@ def test_normal_mode_on_a_synthetic_track(tmp_path, frame_time):
     b = json.loads(meta.read_text(encoding="utf-8"))["bore1_readout"]
     assert b["final"] is True and b["head"]["kind"] == "replay" and b["summary"]["frames"] == 1
     assert b["frame_time"] == frame_time
+    r = b["receive_minus_stamp_ms"]                      # the image stamp was 0.05 s before the last packet
+    assert r["n"] == 1 and 40.0 < r["mean"] < 5000.0
 
 
 def test_torch_head_without_weights_is_refused(tmp_path):
