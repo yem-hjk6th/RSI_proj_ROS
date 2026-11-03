@@ -10,9 +10,9 @@ Schedule. The online thread took the newest frame, waited for an RSI packet at o
 and ran the head. The ring was filled from the RSI process through a queue, so what it held at the gate is not logged.
 The replay gates frame k with exactly the packets received (``pc_ts_perf``) at or before the gate time
 ``t_gate = t_done - ms / 1000`` of its logged row (``ms`` = 0 for a rejected frame): the end of the row minus the head
-time. That is the ring without the queue lag. On E1 it gives the logged gate result on 12651 of the 12835 frames that
-had RSI data; on the other 184 the online ring had not drained the newest packet(s) yet (they were received less than
-2.2 ms before the gate), and 18 more differ by one unit of the last logged decimal (rounding of the 1 us frame times).
+time. That is the ring without the queue lag. On E1 it reproduces the logged gate columns of 12676 of the 12878
+frames; on 184 of the others the online ring had not drained the newest packet yet (received less than 2.2 ms before
+the gate), and 18 differ by one unit of the last logged decimal (rounding of the 1 us frame times).
 ``test/test_golden.py`` checks these numbers.
 """
 from dataclasses import dataclass
