@@ -3,8 +3,8 @@
 The bringup tests start krc_rsi_bridge against krc_sim, so /krc/state is published for 10-20 s at a time. colcon test
 runs packages in parallel, and other packages' node tests react to /krc/state on the default domain 0 (camera_capture
 starts recording at the first KrcState: on CI one bringup test started it early). The domain is set before any
-rclpy.init() in this process; the launched processes inherit it. It is 1-19 (krc_replay uses 50-99,
-width_readout_bore1 20-49). PRINT_SESSION_ROS_DOMAIN_ID overrides the choice.
+rclpy.init() in this process; the launched processes inherit it. It is 1-9, this package's block in the table of
+docs/DESIGN.md section 7 (ten IDs per package inside 0-101). PRINT_SESSION_ROS_DOMAIN_ID overrides the choice.
 """
 import os
 import sys
@@ -14,7 +14,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-os.environ["ROS_DOMAIN_ID"] = os.environ.get("PRINT_SESSION_ROS_DOMAIN_ID", str(1 + os.getpid() % 19))
+os.environ["ROS_DOMAIN_ID"] = os.environ.get("PRINT_SESSION_ROS_DOMAIN_ID", str(1 + os.getpid() % 9))
 
 from e1_paths import DATA, SES, e1_available  # noqa: E402
 
