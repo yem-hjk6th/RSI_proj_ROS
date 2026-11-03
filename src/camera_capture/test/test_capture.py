@@ -31,6 +31,44 @@ def test_decimator_passes_every_frame_below_the_rate():
     assert not d.take(ts[-1])                                          # same period again
 
 
+def test_synthetic_buffer_times_keep_the_schedule_when_read_late():
+    """Like a V4L2 buffer timestamp: a reader that falls behind gets the frames' capture times, not its read times."""
+    src = SyntheticSource(8, 8, fps=40.0)
+    src.open()
+    ts = [src.read()[2] for _ in range(3)]
+    time.sleep(0.2)                                                     # the reader stalls for 8 frame periods
+    t_read = time.monotonic()
+    ts += [src.read()[2] for _ in range(10)]                            # the backlog comes at once
+    assert time.monotonic() - t_read < 0.05
+    assert np.allclose(np.diff(ts), 1 / 40.0, rtol=0, atol=1e-9)
+
+
+def test_preview_is_chosen_on_the_capture_thread(tmp_path):
+    """A publisher that falls behind (here 70 ms per loop) still gets the first frame of every 0.2 s period: the
+    preview stamps keep the decimator's spacing (> 0.2 - 1 / fps), which the node test asserts through ROS."""
+    cam = _cam(tmp_path, fps=40.0, record=False)
+    cam.preview = Decimator(5.0)
+    cam.open()
+    cam.start(record_now=False)
+    seen, seq, t_end = [], 0, time.monotonic() + 3.0
+    while time.monotonic() < t_end:
+        lf = cam.wait_newer(seq, timeout=0.5)
+        if lf is not None:
+            seq = lf.seq
+        pv = cam.take_preview()
+        if pv is not None:
+            seen.append(pv)
+        time.sleep(0.07)
+    cam.stop()
+    stamps = [pv.stamp for pv in seen[1:]]                              # the first may follow an earlier period
+    assert len(stamps) >= 12 and len({pv.seq for pv in seen}) == len(seen)          # each taken once
+    gaps = np.diff(stamps)
+    assert gaps.min() > 0.2 - 1 / 40.0 - 1e-6 and np.median(gaps) == pytest.approx(0.2, abs=0.03)
+    slots = [int(np.floor(t / 0.2)) for t in stamps]
+    assert slots == list(range(slots[0], slots[0] + len(slots)))        # one per period, none skipped
+    assert all(t - 0.2 * k < 1 / 40.0 + 1e-6 for t, k in zip(stamps, slots))         # the period's first frame
+
+
 def test_downscale_and_tiles():
     f = np.zeros((1200, 1920, 3), np.uint8)
     assert downscale(f, 640).shape == (400, 640, 3)

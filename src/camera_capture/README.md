@@ -39,7 +39,9 @@ Start-up, as `run_cl.py` / `ElpCam`:
 **Threads.** The capture thread reads, stamps and hands each frame to the recorder queue without waiting (a full
 queue drops the frame and counts it, as `ElpCam`). The writer thread writes the files and the CSV. A publisher thread
 takes the newest frame; when it falls behind it skips frames (counted), and the capture and the recording do not
-notice. Nothing in the capture or recording path waits on ROS.
+notice. The preview is chosen on the capture thread, which sees every frame (the first frame of each `1 / preview_hz`
+period by capture time), and waits in a slot of its own, so a publisher that falls behind still publishes that frame
+and not a later one. Nothing in the capture or recording path waits on ROS.
 
 **Stamps.** `KrcState.stamp` is the wall clock (`time.time()`). A V4L2 buffer carries its capture time on
 `CLOCK_MONOTONIC` (uvcvideo: start of frame; OpenCV's `CAP_PROP_POS_MSEC` on the V4L2 backend). The stamp is that time
@@ -173,7 +175,7 @@ in-process design with and without a raw-image subscriber; the decision is to be
 |---|---|
 | `test_recorder.py` | 1: synthetic frames → recorder (HEVC on the ffmpeg stub, and on the real ffmpeg with libx264 in place of hevc_nvenc): segment files and CSV rows 1:1, counted in each fragmented MP4. 3: no ffmpeg, ffmpeg not on `PATH`, no NVENC (stub and the real ffmpeg without a GPU), ffmpeg cannot start a segment: fallback logged, 1:1. 4: ffmpeg killed mid-segment, exits by itself, dies before the session end, a blocked write (watchdog), a full backlog: 1:1, lost frames counted. 6: `test_hevc_nvenc_selftest_and_recording` skips without NVENC. Queue drops counted. |
 | `test_golden_e1.py` | 2: the E1 frame times through the port give the E1 CSVs (header, rows, file names). |
-| `test_capture.py` | 5: preview decimation (5 Hz for any faster rate), stamps = buffer capture time on the wall clock, strictly increasing, read-time fallback; recording start, read failures, the `measured` block, stable device paths. |
+| `test_capture.py` | 5: preview decimation (5 Hz for any faster rate), chosen on the capture thread (the period's first frame also when the publisher falls behind), stamps = buffer capture time on the wall clock, strictly increasing, read-time fallback, the synthetic source's buffer times on its schedule (as a V4L2 buffer when the reader is late); recording start, read failures, the `measured` block, stable device paths. |
 | `test_node_ros.py` | 5 through ROS: image and preview topics on a synthetic source, stamps, preview rate, recording 1:1, the `session_meta` block, recording from the first RSI packet; a borescope refuses exposure. |
 | `test_formats.py` | names and rows; `build_cmd`, `fmp4_frames` and the self-test frames against the legacy module; the AVI and MP4 counters. |
 | `test_controls_meta.py` | controls set in order and read back (fake camera, fake `v4l2-ctl`), exposure units, concurrent `session_meta` writers, the verify tool on E1 frames. |

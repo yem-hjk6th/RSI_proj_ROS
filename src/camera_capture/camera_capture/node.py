@@ -94,7 +94,7 @@ class CameraNode(Node):
         self.preview_topic = g("preview_topic") or f"/{name}/preview"
         self.frame_id = g("frame_id") or name
         self.publish_raw = bool(g("publish_raw"))
-        self.decim = Decimator(float(g("preview_hz")))
+        self.decim = self.cam.preview = Decimator(float(g("preview_hz")))     # decided on the capture thread
         self.preview_width = int(g("preview_width"))
         self.n_raw = self.n_preview = self.n_skipped = self.n_pub_errors = 0
 
@@ -175,8 +175,9 @@ class CameraNode(Node):
                 if self.publish_raw and self.pub_raw.get_subscription_count() > 0:
                     self.pub_raw.publish(to_image(lf.frame, lf.stamp, self.frame_id))
                     self.n_raw += 1
-                if self.decim.take(lf.stamp):
-                    self.pub_prev.publish(to_image(downscale(lf.frame, self.preview_width), lf.stamp, self.frame_id))
+                pv = self.cam.take_preview()
+                if pv is not None:
+                    self.pub_prev.publish(to_image(downscale(pv.frame, self.preview_width), pv.stamp, self.frame_id))
                     self.n_preview += 1
             except Exception as e:  # noqa: BLE001 - shutdown races, never stop the capture
                 self.n_pub_errors += 1

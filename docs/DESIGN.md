@@ -150,3 +150,16 @@ controller:** its reply carries no OvCmd, and the lab's print programs load `RSI
   slice of E1, with a heartbeat-loss case.
 - **Latency test** (`krc_replay`): `krc_sim` against a bridge on another host; on loopback in CI.
 - **CI:** colcon build and test in a `ros:jazzy` container on every push.
+- **ROS domains of the tests.** `colcon test` runs the packages in parallel, and their node tests use the same topics
+  (`/krc/state`, `/krc/override_cmd`, `/width/*`, `/elp/*`). Each package's `test/conftest.py` therefore puts its tests
+  on a domain of its own before any `rclpy.init()`, from a block of ten IDs (`<base> + pid % 10`; `<PACKAGE>_ROS_DOMAIN_ID`
+  overrides it). All blocks are inside 0–101, the range the ROS 2 documentation calls safe on every platform. Domain 0,
+  the default, stays for live sessions.
+
+  | IDs | Package | IDs | Package |
+  |---|---|---|---|
+  | 1–9 | `print_session` | 50–59 | `krc_replay` |
+  | 10–19 | `camera_capture` | 60–69 | `width_readout_elp` |
+  | 20–29 | `width_readout_bore1` | 70–79 | `krc_eki_bridge` |
+  | 30–39 | `krc_rsi_bridge` | 80–89 | `krc_sim` |
+  | 40–49 | `cl_controller` | 90–101 | free |

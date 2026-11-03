@@ -133,8 +133,9 @@ class V4l2Source:
 
 class SyntheticSource:
     """Test source: frames ``w`` x ``h`` with the frame number written into the pixels, paced at ``fps`` (or as fast as
-    read when ``fps`` is 0). The buffer time is the moment the frame was made. ``fail_every`` makes every n-th read
-    fail (a camera read failure)."""
+    read when ``fps`` is 0). The buffer time is the frame's scheduled capture time (``t0 + k / fps``): like a V4L2
+    buffer timestamp, it does not move when the reader is late. Unpaced, it is the read time. ``fail_every`` makes
+    every n-th read fail (a camera read failure)."""
 
     def __init__(self, width: int = 64, height: int = 48, fps: float = 0.0, n_frames: Optional[int] = None,
                  fail_every: int = 0, buffer_time: bool = True):
@@ -177,7 +178,7 @@ class SyntheticSource:
         if self.fail_every and self.reads % self.fail_every == 0:
             return False, None, None
         self.k += 1
-        t = time.monotonic()
+        t = self.t_next if self.fps > 0 else time.monotonic()
         return True, self.make(self.k), (t if self.buffer_time else None)
 
     def release(self):

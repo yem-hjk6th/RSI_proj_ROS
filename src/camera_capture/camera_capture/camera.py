@@ -7,6 +7,9 @@ Threads (as in ``ElpCam``):
 - **writer** and **watchdog**: ``recorder.RecorderThread``.
 - The ROS node's publisher thread takes the newest frame (``wait_newer``); a publisher that falls behind skips frames,
   the capture and the recording do not notice.
+- The preview is decided on the capture thread, which sees every frame (``preview``, a ``preview.Decimator`` on the
+  capture stamps), and the chosen frame waits in a slot of its own (``take_preview``). So a publisher that falls
+  behind still publishes the first frame of each preview period, not a later one.
 
 Recording starts at ``start(record_now=True)`` or later with ``start_recording()`` (legacy ``wait_for_rsi``: the first
 RSI packet). ``frame_idx`` in the CSV counts the frames read since then, from 1.
@@ -99,6 +102,8 @@ class Camera:
         self._stop = threading.Event()
         self._cond = threading.Condition()
         self._latest: Optional[LatestFrame] = None
+        self.preview = None                     # preview.Decimator (set by the node before start), on every frame
+        self._preview: Optional[LatestFrame] = None
         self.thread: Optional[threading.Thread] = None
         self.n_read = 0
         self.frame_count = 0
@@ -164,13 +169,23 @@ class Camera:
                     self.t_first = t_wall
                 self.t_last = t_wall
                 rt.offer((frame, t_mono, t_wall, t_perf, idx))
+            lf = LatestFrame(self.n_read, frame, stamp, t_mono, idx)
+            take = self.preview is not None and self.preview.take(stamp)
             with self._cond:
-                self._latest = LatestFrame(self.n_read, frame, stamp, t_mono, idx)
+                self._latest = lf
+                if take:
+                    self._preview = lf
                 self._cond.notify_all()
 
     def latest(self) -> Optional[LatestFrame]:
         with self._cond:
             return self._latest
+
+    def take_preview(self) -> Optional[LatestFrame]:
+        """The newest frame the preview decimator chose, once (None while none is pending)."""
+        with self._cond:
+            lf, self._preview = self._preview, None
+            return lf
 
     def wait_newer(self, seq: int, timeout: float = 0.5) -> Optional[LatestFrame]:
         """The newest frame once its ``seq`` is above ``seq``; None on timeout or stop."""
