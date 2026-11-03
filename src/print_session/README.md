@@ -185,3 +185,7 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`, `Bor
 | `test_cameras.py` | The `cameras` file plan and its refusals; the example camera files keep the legacy profiles. |
 | `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only); the bore1 readout plan and its refusals. |
 | `test_export_unit.py` | Exporter formats and joins on hand-made messages. |
+
+The tests run on a ROS domain of their own (1–19, set in `test/conftest.py`; `PRINT_SESSION_ROS_DOMAIN_ID` overrides
+it): the bringup tests publish `/krc/state` through the bridge, which other packages' node tests running in parallel
+react to.
