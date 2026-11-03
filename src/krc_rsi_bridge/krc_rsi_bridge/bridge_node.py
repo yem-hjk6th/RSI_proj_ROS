@@ -21,6 +21,7 @@ from .path_speed import PathSpeed
 from .records import reply_fields
 from .server import RsiServer, ServerConfig, source_code
 from .shared import F
+from .window import PatternGeom
 
 PARAMS = dict(
     host="127.0.0.1", port=59152, pattern_file="", mode="closed",
@@ -56,6 +57,10 @@ class RsiBridgeNode(Node):
             deadline_s=float(p["deadline_s"]), rt_priority=int(p["rt_priority"]), cpu=int(p["cpu"]),
             ring_capacity=int(p["ring_capacity"])))
         self.speed = PathSpeed(float(p["tau_v"]), int(p["k_chord"]))
+        geom = PatternGeom.load(p["pattern_file"])
+        if geom.last_z is not None:
+            self.get_logger().warning(f"multi-layer pattern {geom.src}: the print window closes at the last print "
+                                      f"point only at the planned last Z {geom.last_z:g} mm")
         self.pub = self.create_publisher(KrcState, "/krc/state", 100)
         self.pub_reply = self.create_publisher(ReplyRecord, "/krc/reply_record", 100)
         self.ov_sent = p["mode"] in ("closed", "step")

@@ -64,9 +64,9 @@ active only with a pattern whose segs csv has a `z_off` column; single-layer pat
   the latch shows as `forced`. `session_meta.json` (print_session) records `sat_s`, `sat_min_dz` and `sources` in its
   `realtime` block, as the legacy `_ml` `run_cl.py` does.
 
-Not ported here: the bridges' own print window (`krc_rsi_bridge`, `krc_eki_bridge`) still closes at the last x / y
-without the `last_z` gate, i.e. at the end of the first connector of a wall program. The legacy RSI process used the
-`_ml` `PrintWindow`. The wall programs need that change before they run on the controller through ROS.
+The RSI bridge has its own print window (it sends `ov_outside` outside it); it has the same `last_z` gate
+(`krc_rsi_bridge/window.py`), as the legacy RSI process used the `_ml` `PrintWindow`. `krc_eki_bridge` has no print
+window: outside the window the controller itself publishes `ov_default`.
 
 ## Parameters
 
