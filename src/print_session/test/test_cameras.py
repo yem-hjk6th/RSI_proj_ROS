@@ -56,6 +56,9 @@ def test_refusals(tmp_path):
     assert len(plan_cameras(e1, "S", tmp_path, "", readout=False, usb_cam=False)) == 2
     with pytest.raises(Refused, match="the bringup sets them"):
         plan_cameras({"elp": dict(session="x")}, "S", tmp_path, "/elp/image_raw", True, False)
+    assert len(plan_cameras(e1, "S", tmp_path, "/elp/image_raw", True, False, bore1_topic="/bore1/image_raw")) == 2
+    with pytest.raises(Refused, match="bore1 readout on /bore2/image_raw"):
+        plan_cameras(e1, "S", tmp_path, "/elp/image_raw", True, False, bore1_topic="/bore2/image_raw")
     with pytest.raises(Refused, match="both publish"):
         plan_cameras({"a": dict(image_topic="/x"), "b": dict(image_topic="/x")}, "S", tmp_path, "/x", True, False)
     with pytest.raises(Refused, match="same files"):

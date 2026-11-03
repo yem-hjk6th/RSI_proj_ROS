@@ -13,6 +13,8 @@ from e1_paths import DATA, E1_YAML, LEGACY, LEGACY_PATTERN
 from print_session.startup import Refused, load_params, plan
 
 CL_PATTERNS = E1_YAML.parents[1] / "src" / "cl_controller" / "patterns"
+B1_LOG = DATA / "raw_video" / "bore1_rt_20261022_165128.csv.gz"
+B1_REPLAY = dict(width_readout_bore1__head="replay", width_readout_bore1__replay_csv=str(B1_LOG))
 
 
 def _params(**over):
@@ -31,7 +33,7 @@ def _plan(mode="closed", image_topic="/elp/image_raw", **over):
 
 def test_e1_realtime_block_equals_session_meta():
     meta = json.loads((DATA / "raw_video" / "session_meta.json").read_text(encoding="utf-8"))["realtime"]
-    p = _plan(print_session__bore1_readout=True)
+    p = _plan(print_session__bore1_readout=True, **B1_REPLAY)
     rt = json.loads(json.dumps(p.realtime))           # as written to the file
     assert set(rt) == set(meta)                         # mode, cfg, rig, pattern, version, law, order, speed
     assert rt["mode"] == meta["mode"] == "closed"
@@ -131,9 +133,48 @@ def test_step_without_image_topic_runs_without_readout():
 def test_no_bore1_warning_and_e1_with_bore1():
     p = _plan("closed", cl_controller__plan="A")
     assert any("ELP -> model only" for line in p.log)
-    q = _plan("closed", print_session__bore1_readout=True)
+    q = _plan("closed", print_session__bore1_readout=True, **B1_REPLAY)
     assert q.realtime["law"]["plan"] == "A_b1" and not any("model only" in line for line in q.log)
     assert asdict(q)["session"]["bore1_readout"] is True
+
+
+def test_bore1_readout_plan(tmp_path):
+    """T11: bore1_readout starts width_readout_bore1 with the controller's pattern; A_b1 needs it."""
+    p = _plan("closed", print_session__bore1_readout=True, **B1_REPLAY)
+    assert p.bore1 == dict(pattern_json=str(p.pattern)) and p.needs_bore1 is True
+    line = next(x for x in p.log if x.startswith("bore1 readout:"))
+    assert "REPLAY head" in line and "/bore1/image_raw" in line and "frame time receive" in line
+    wd = tmp_path / "w"
+    wd.mkdir()
+    for s in (0, 1, 2):
+        (wd / f"cnxt_t_deploy_s{s}.pt").write_bytes(b"x")
+    q = _plan("closed", cl_controller__plan="A", print_session__bore1_readout=True,
+              width_readout_bore1__weight_dir=str(wd), width_readout_bore1__frame_time="header",
+              width_readout_bore1__header_offset_s=0.04)
+    assert q.bore1 is not None and q.needs_bore1 is False         # plan A: ELP first, bore1 is the fallback
+    assert any("torch head" in x and "header + 0.04 s" in x for x in q.log)
+    assert _plan("closed", cl_controller__plan="A").bore1 is None
+    assert _plan("step", print_session__bore1_readout=True, **B1_REPLAY).needs_bore1 is False
+
+
+@pytest.mark.parametrize("over,match", [
+    ({}, "weight_dir '' is not a folder"),                                      # torch is the default head
+    (dict(width_readout_bore1__weight_dir="/nonexistent/w"), "is not a folder"),
+    (dict(width_readout_bore1__weight_dir="EMPTY"), "missing cnxt_t_deploy_s0.pt"),
+    (dict(width_readout_bore1__head="replay"), "replay_csv"),
+    (dict(width_readout_bore1__head="onnx"), "head 'onnx'"),
+    (dict(width_readout_bore1__head="replay", width_readout_bore1__replay_csv=str(B1_LOG),
+          width_readout_bore1__frame_time="soon"), "frame_time"),
+    (dict(width_readout_bore1__head="replay", width_readout_bore1__replay_csv=str(B1_LOG),
+          width_readout_bore1__lockstep=True), "lockstep"),
+    (dict(width_readout_bore1__head="replay", width_readout_bore1__replay_csv=str(B1_LOG),
+          width_readout_bore1__pattern_json=str(LEGACY / "pattern" / "pattern_usr_ELP_R1v12_CL_261021.json")),
+     "not the controller's pattern"),
+])
+def test_bore1_readout_refusals(tmp_path, over, match):
+    over = {k: (str(tmp_path) if v == "EMPTY" else v) for k, v in over.items()}
+    with pytest.raises(Refused, match=match):
+        _plan("closed", print_session__bore1_readout=True, **over)
 
 
 def test_shadow_refused_on_rsi_ov4():

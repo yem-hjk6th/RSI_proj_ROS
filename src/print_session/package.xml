@@ -15,6 +15,7 @@
   <exec_depend>krc_rsi_bridge</exec_depend>
   <exec_depend>cl_controller</exec_depend>
   <exec_depend>width_readout_elp</exec_depend>
+  <exec_depend>width_readout_bore1</exec_depend>
   <exec_depend>camera_capture</exec_depend>
   <exec_depend>ros2bag</exec_depend>
   <exec_depend>rosbag2_py</exec_depend>

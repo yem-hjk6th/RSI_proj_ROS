@@ -243,3 +243,68 @@ def test_step_bringup_without_readout_with_cameras(tmp_path):
     assert all(f["file"].endswith(".avi") for f in res["elp_frames_cams.csv"]["files"])
     assert len(res["elp_frames_cams.csv"]["files"]) >= 2                                      # 2 s segments
     assert [f["file"][-4:] for f in res["borescope_frames_cams.csv"]["files"]] == [".mp4"]
+
+
+# ---------------------------------------------------------------------------------------- T11: bore1 readout
+def test_closed_a_b1_bringup_with_the_bore1_readout(tmp_path):
+    """Plan A_b1 (E1's plan) in closed mode: print_session.bore1_readout starts width_readout_bore1 (replay head on
+    E1's bore1 log, no weights in CI) on the synthetic bore1 camera; its records go into the bag, bag_to_legacy writes
+    raw_video/<ses>/bore1_rt_<ses>.csv, and the node writes its session_meta block."""
+    from krc_sim.sim import SimConfig, SimProcess
+
+    from print_session import topics as T
+    from print_session.bag_io import read_bag
+    from print_session.bag_to_legacy import main as export_main
+    from print_session.legacy_cols import B1_COLS
+    from print_session.startup import pattern_dirs
+    from e1_paths import DATA
+
+    port = _free_udp_port()
+    params = _params(tmp_path, port, plan="A_b1")
+    y = yaml.safe_load(params.read_text(encoding="utf-8"))
+    y["print_session"]["ros__parameters"]["bore1_readout"] = True
+    y["width_readout_bore1"] = dict(ros__parameters=dict(
+        head="replay", replay_csv=str(DATA / "raw_video" / "bore1_rt_20261022_165128.csv.gz")))
+    params.write_text(yaml.safe_dump(y), encoding="utf-8")
+    out_dir = tmp_path / "sessions"
+    proc = _launch("mode:=closed", f"params_file:={params}", f"out_dir:={out_dir}", "session:=b1",
+                   f"cameras:={_synthetic_cameras(tmp_path)}")
+    sdir = out_dir / "b1"
+    try:
+        t_end = time.monotonic() + 60
+        while time.monotonic() < t_end and not ((sdir / "session_meta.json").exists() and _bound(port)):
+            assert proc.poll() is None, proc.stdout.read()[-4000:]
+            time.sleep(0.2)
+        assert _bound(port), "bridge did not bind"
+        time.sleep(3.0)                                # discovery (recorder, readouts, cameras)
+        pat = next(d / "pattern_usr_ELP_R1v30_CLp_261022.json" for d in pattern_dirs()
+                   if (d / "pattern_usr_ELP_R1v30_CLp_261022.json").exists())
+        st = SimProcess(SimConfig(port=port, pattern_file=str(pat), duration_s=6.0)).start().result(60)
+    except BaseException:
+        os.killpg(proc.pid, signal.SIGINT)
+        print(proc.communicate(timeout=60)[0][-6000:])
+        raise
+    out = _finish(proc, 90)
+    print(out[-3000:])
+    assert proc.returncode == 0, out[-4000:]
+    assert st.sent >= 1200 and not st.timeout_stopped and st.nonzero_rkorr == 0
+    assert "[width_readout_bore1" in out and "REPLAY head" in out
+
+    meta = json.loads((sdir / "session_meta.json").read_text(encoding="utf-8"))
+    assert meta["print_session"]["bore1_readout"] is True and meta["realtime"]["law"]["plan"] == "A_b1"
+    b = meta["bore1_readout"]
+    assert b["final"] is True and b["head"]["kind"] == "replay" and b["frame_time"] == "receive"
+    assert b["summary"]["frames"] > 20 and b["summary"]["errors"] == 0
+
+    msgs = read_bag(sdir / "bag")
+    recs = msgs.get(T.BORE1_RECORD, [])
+    assert 20 < len(recs) <= b["summary"]["frames"]
+    gates = {r.gate for r in recs}
+    assert gates <= {"ok", "stale", "no_track", "z_or_dir", "leg_or_x"} and gates - {"stale"}, gates
+    assert all(r.pushed == 0 for r in recs if r.gate == "ok")       # no logged prediction at these frame times
+    assert {c.plan for c in msgs[T.CTRL]} == {"A_b1"}
+
+    exp = tmp_path / "export"
+    assert export_main([str(sdir / "bag"), "--out", str(exp)]) == 0
+    lines = (exp / "raw_video" / "b1" / "bore1_rt_b1.csv").read_text(encoding="utf-8").splitlines()
+    assert lines[0].split(",") == B1_COLS and len(lines) - 1 == len(recs)

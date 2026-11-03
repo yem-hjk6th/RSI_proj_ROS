@@ -4,10 +4,13 @@
   rsi_proc.py writes them (times %.6f, RIst / RSol %.3f, integers as they are).
 - ov_cmd_<ses>.csv: rsi_proc.SIDECAR_HEADER.
 - ctrl_ / readout_ / readout_rows_<ses>.csv: CTRL_COLS / READOUT_COLS / ROWS_COLS of run_cl.py, values through run_cl._f.
+- raw_video bore1_rt_<ses>.csv: B1_COLS of bore1/bore1_rt.py, values as Bore1Thread writes them
+  (width_readout_bore1.readout.legacy_csv_row).
 """
 import math
 
 from cl_controller.record import CTRL_COLS  # noqa: F401  (re-exported: the one list of the ctrl columns)
+from width_readout_bore1.readout import B1_COLS  # noqa: F401  (re-exported: the bore1_rt columns)
 
 RSI_COLS = ["pc_ts_monotonic", "pc_ts_wall", "ipoc", "rist_x_mm", "rist_y_mm", "rist_z_mm", "rist_a_deg", "rist_b_deg",
             "rist_c_deg", "rsol_x_mm", "rsol_y_mm", "rsol_z_mm", "rsol_a_deg", "rsol_b_deg", "rsol_c_deg", "delay",
@@ -45,6 +48,13 @@ NOT_CARRIED = {
     },
     "readout_rows": {
         "frame": "renumbered as in readout",
+    },
+    "bore1_rt": {
+        "t_frame": "derived: Bore1Record.stamp (the frame time on the wall clock) minus the median KrcState.stamp - "
+                   "ReplyRecord.pc_ts_perf offset of the bag",
+        "_frame": "Bore1Record.frame: in a ROS session the readout node's count of processed frames, not the camera's "
+                  "frame index",
+        "_rows": "frames the node skipped while busy have no record (as in the legacy thread)",
     },
 }
 

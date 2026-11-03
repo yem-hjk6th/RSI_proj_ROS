@@ -7,6 +7,9 @@
 
 cameras:=<file> starts one camera_capture node per section of the file: capture, recording to
 <out_dir>/<session>/raw_video/ and the camera's block of session_meta.json (print_session.cameras).
+print_session.bore1_readout: true starts width_readout_bore1 (section width_readout_bore1 of params_file; plan A_b1
+needs it). If it ends while the session runs and the plan uses bore1, the session ends (legacy run_cl refused A_b1
+without the bore1 head); otherwise the session goes on with ELP -> model.
 readout:=false runs without the ELP readout (step mode only). An empty image_topic:= is not accepted by ros2 launch.
 
 mode (shadow | closed | step) and params_file are required and have no default: since 261020 r2, run_cl.py refuses a
@@ -24,12 +27,13 @@ from launch.actions import (DeclareLaunchArgument, EmitEvent, ExecuteProcess, Lo
                             RegisterEventHandler)
 from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
+from launch.events.process import ProcessExited
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 from print_session import topics as T
 from print_session.cameras import plan_cameras, switch
-from print_session.startup import BRIDGE, CONTROLLER, READOUT, SESSION, Refused, load_params, plan
+from print_session.startup import BORE1, BRIDGE, CONTROLLER, READOUT, SESSION, Refused, load_params, plan
 
 
 def _setup(context):
@@ -43,9 +47,11 @@ def _setup(context):
         usb_cam = switch("start_camera", arg("start_camera"))
         preview = switch("preview", arg("preview"))
         image_topic = arg("image_topic") if readout else ""
-        p = plan(load_params(params_file), mode, image_topic)
+        params = load_params(params_file)
+        p = plan(params, mode, image_topic)
+        bore1_topic = params.get(BORE1, {}).get("image_topic", "/bore1/image_raw") if p.bore1 is not None else ""
         cams = plan_cameras(load_params(cameras_file) if cameras_file else {}, ses, sdir, image_topic, readout,
-                            usb_cam)
+                            usb_cam, bore1_topic)
     except Refused as e:
         raise RuntimeError(f"print_session refused to start: {e}") from None
     sdir.mkdir(parents=True, exist_ok=True)
@@ -70,6 +76,12 @@ def _setup(context):
             cam_params = [arg("camera_params")] if arg("camera_params") else []
             acts.append(Node(package="usb_cam", executable="usb_cam_node_exe", name="elp_camera", output="screen",
                              parameters=cam_params, remappings=[("image_raw", image_topic)]))
+    if p.bore1 is not None:
+        bore1 = Node(package="width_readout_bore1", executable="width_readout_bore1_node", name=BORE1, output="screen",
+                     parameters=[params_file, dict(p.bore1, session_meta=str(sdir / "session_meta.json"))])
+        acts.append(bore1)
+        acts.append(RegisterEventHandler(OnProcessExit(
+            target_action=bore1, on_exit=lambda ev, ctx, need=p.needs_bore1: _bore1_exit(ev, ctx, need))))
     if cams:
         camera = "camera_capture"
         cameras_file = str(Path(cameras_file).resolve())
@@ -93,6 +105,17 @@ def _setup(context):
     acts.append(RegisterEventHandler(OnProcessExit(
         target_action=session, on_exit=[EmitEvent(event=Shutdown(reason="print session ended"))])))
     return acts
+
+
+def _bore1_exit(ev: ProcessExited, ctx, needed: bool):
+    """width_readout_bore1 ended. A plan that uses bore1 cannot go on without it: end the session."""
+    msg = f"[print_session] {BORE1} ended (exit code {ev.returncode})"
+    if getattr(ctx, "is_shutdown", False):
+        return [LogInfo(msg=msg + " at the session end")]
+    if not needed:
+        return [LogInfo(msg=msg + "; the session goes on without bore1 (ELP -> model)")]
+    return [LogInfo(msg=msg + "; the plan uses bore1: ending the session"),
+            EmitEvent(event=Shutdown(reason=f"{BORE1} ended"))]
 
 
 def generate_launch_description():

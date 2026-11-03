@@ -10,7 +10,7 @@ The bringup sets, per camera:
 
 Refused: a camera file and ``start_camera:=true`` (usb_cam) together; a section that sets one of the values above;
 two cameras with the same image topic or file names; and, with the readout on, an ``image_topic`` that none of the
-cameras publishes.
+cameras publishes (also the bore1 readout's ``image_topic`` when it runs).
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,7 +41,7 @@ class CameraNode:
 
 
 def plan_cameras(cameras: Dict[str, dict], session: str, session_dir: Path, image_topic: str, readout: bool,
-                 usb_cam: bool) -> List[CameraNode]:
+                 usb_cam: bool, bore1_topic: str = "") -> List[CameraNode]:
     """One ``CameraNode`` per section of the camera file (``{node name: ros__parameters}``), or Refused."""
     if not cameras:
         return []
@@ -72,4 +72,7 @@ def plan_cameras(cameras: Dict[str, dict], session: str, session_dir: Path, imag
     if readout and image_topic not in seen_topics:
         raise Refused(f"readout on {image_topic}, but no camera in the camera file publishes it (they publish "
                       f"{', '.join(seen_topics)}); set image_topic, or readout:=false (step mode only)")
+    if bore1_topic and bore1_topic not in seen_topics:
+        raise Refused(f"bore1 readout on {bore1_topic}, but no camera in the camera file publishes it (they publish "
+                      f"{', '.join(seen_topics)}); set width_readout_bore1.image_topic")
     return out

@@ -6,10 +6,13 @@ bridge's decider; the PR description lists every one with its run_cl.py line):
 - shadow / closed need the ELP readout                                     run_cl.py:588-589
 - a plan whose order or force_seg uses bore1 needs a bore1 readout         run_cl.py:621, 692-695
   (no bore1 readout and a plan that does not need it: warning)              run_cl.py:696-697
+- the bore1 readout (print_session.bore1_readout: the bringup starts width_readout_bore1) needs a head it can load:
+  torch with a weight_dir that holds the three seed files (the node checks their sha256 before it publishes), or
+  replay with a replay_csv; legacy run_cl loaded the head before RSI and refused A_b1 without it  run_cl.py:676-695
 - the step test's limit_probe is refused (the bridge does not port it: it sent an unclamped value)  run_cl.py:352-355
 - shadow mode is refused unless print_session.krc_rsi_config is RSI_MIN (on RSI_OV4 it is 1 % override)
 ROS-only checks (no run_cl.py counterpart, they keep the separate nodes consistent):
-- the bridge, the readout and the controller use the same pattern file;
+- the bridge, the readouts and the controller use the same pattern file;
 - the bridge's effective window (floor included) equals the controller's;
 - a value the bridge derives from the controller's configuration is not set differently in the bridge's section.
 """
@@ -35,9 +38,11 @@ SHADOW_WARNING = ("SHADOW MODE: the replies carry no OvCmd. On a KRC program tha
 
 # node names = the top-level keys of the parameter file
 BRIDGE, CONTROLLER, READOUT, SESSION = "krc_rsi_bridge", "cl_controller", "width_readout_elp", "print_session"
+BORE1 = "width_readout_bore1"
 
 SESSION_PARAMS = dict(
-    bore1_readout=False,        # a width_readout_bore1 node publishes /width/bore1 (legacy: the bore1 head loaded)
+    bore1_readout=False,        # the bringup starts width_readout_bore1 (section width_readout_bore1 of the params
+                                # file), which publishes /width/bore1; plans that use bore1 (A_b1) need it
     disconnect_timeout_s=2.0,   # end the session this long after the last RSI packet (E1 session_meta rsi block)
     src_name="",                # the .src running on the KRC (run_cl --src-name), written to session_meta
     ceiling_light="",           # on | off | "" (run_cl --ceiling-light), written to session_meta
@@ -53,6 +58,8 @@ class Plan:
     bridge: Dict[str, object]           # parameter overrides for krc_rsi_bridge
     controller: Dict[str, object]       # parameter overrides for cl_controller
     readout: Optional[Dict[str, object]]  # parameter overrides for width_readout_elp (None = no readout node)
+    bore1: Optional[Dict[str, object]]    # parameter overrides for width_readout_bore1 (None = no bore1 node)
+    needs_bore1: bool                     # the plan uses bore1 (order or force_seg): the session ends without it
     session: Dict[str, object]          # print_session parameters (defaults + file)
     realtime: dict                      # session_meta.json "realtime"
     log: List[str] = field(default_factory=list)   # lines the legacy start-up printed (warnings)
@@ -173,8 +180,8 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
     if mode != "step":
         if needs_b1 and not sess["bore1_readout"]:
             raise Refused(f"plan {law_cfg.plan} (order {' -> '.join(ctrl.law.order)}) needs the bore1 readout: set "
-                          f"{SESSION}.bore1_readout true only when a width_readout_bore1 node publishes /width/bore1 "
-                          f"(run_cl.py:692-695)")
+                          f"{SESSION}.bore1_readout true and configure the {BORE1} section (head, weight_dir); the "
+                          f"bringup then starts {BORE1}, which publishes /width/bore1 (run_cl.py:692-695)")
         if not sess["bore1_readout"]:
             log.append(f"no bore1 readout -> plan {law_cfg.plan} runs ELP -> model only")
     if sess["ceiling_light"] not in ("", "on", "off"):
@@ -225,6 +232,12 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
             raise Refused(f"{READOUT}.pattern_json {rd_file['pattern_json']} is not the controller's pattern {pj}")
         readout = dict(image_topic=image_topic, pattern_json=str(pj), rig_json=str(rig))
 
+    # ---- bore1 readout: the same pattern, a head it can load
+    bore1 = None
+    if sess["bore1_readout"]:
+        bore1 = dict(pattern_json=str(pj))
+        log.append(bore1_check(params.get(BORE1, {}), pj))
+
     # ---- what the legacy start-up printed
     info = pattern_speed_info(pat)
     ov_base_given = float(cl["ov_base"]) or None
@@ -244,7 +257,38 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
     realtime = dict(mode=mode, cfg=_jsonable(asdict(cfg)), rig=str(rig), pattern=str(pj), version=VERSION,
                     law=_jsonable(asdict(law_cfg)), order=list(ctrl.law.order), speed=speed)
     return Plan(mode=mode, pattern=pj, rig=rig, bridge=bridge, controller=dict(mode=mode, pattern=str(pj)),
-                readout=readout, session=sess, realtime=realtime, log=log)
+                readout=readout, bore1=bore1, needs_bore1=bool(needs_b1 and mode != "step"), session=sess,
+                realtime=realtime, log=log)
+
+
+def bore1_check(sec: dict, pattern: Path) -> str:
+    """Refuse a width_readout_bore1 section the node could not start with; else the start-up line."""
+    from width_readout_bore1.head import HEAD_KINDS, SEEDS, weight_name
+    from width_readout_bore1.params import FRAME_TIMES, PARAMS
+    p = {**PARAMS, **sec}
+    if sec.get("pattern_json") and not _same_file(sec["pattern_json"], pattern):
+        raise Refused(f"{BORE1}.pattern_json {sec['pattern_json']} is not the controller's pattern {pattern}")
+    if sec.get("lockstep"):
+        raise Refused(f"{BORE1}.lockstep is for replay tests only")
+    if p["head"] not in HEAD_KINDS:
+        raise Refused(f"{BORE1}.head {p['head']!r}: one of {', '.join(HEAD_KINDS)}")
+    if p["frame_time"] not in FRAME_TIMES:
+        raise Refused(f"{BORE1}.frame_time {p['frame_time']!r}: one of {', '.join(FRAME_TIMES)}")
+    if p["head"] == "torch":
+        wd = Path(str(p["weight_dir"] or ""))
+        if not str(p["weight_dir"] or "") or not wd.is_dir():
+            raise Refused(f"{BORE1}.weight_dir {str(p['weight_dir'])!r} is not a folder: the bore1 head needs the "
+                          f"weights (cnxt_t_deploy_s0.pt .. s2.pt, not in this repository)")
+        missing = [weight_name(s) for s in SEEDS if not (wd / weight_name(s)).is_file()]
+        if missing:
+            raise Refused(f"{BORE1}.weight_dir {wd}: missing {', '.join(missing)}")
+        what = f"torch head, weights {wd} (sha256 checked by the node), device {p['device']}"
+    else:
+        if not p["replay_csv"] or not Path(p["replay_csv"]).is_file():
+            raise Refused(f"{BORE1}.head replay needs replay_csv (a bore1_rt csv): {p['replay_csv']!r} not found")
+        what = f"REPLAY head ({Path(p['replay_csv']).name}): logged head outputs, not the camera"
+    return (f"bore1 readout: {BORE1} on {p['image_topic']} -> {p['width_topic']}, {p['record_topic']}; {what}; frame "
+            f"time {p['frame_time']}" + (f" + {p['header_offset_s']} s" if p["frame_time"] == "header" else ""))
 
 
 def _jsonable(d):

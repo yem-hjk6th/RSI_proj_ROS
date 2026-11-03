@@ -4,6 +4,7 @@ Output layout (what legacy eval_v3_print.py --data <out> --session <ses> reads):
     <out>/roboter/<ses>/rsi_data_<ses>.csv, ov_cmd_<ses>.csv, ctrl_<ses>.csv, readout_<ses>.csv,
     readout_rows_<ses>.csv
     <out>/raw_video/<ses>/session_meta.json   (copied, when given)
+    <out>/raw_video/<ses>/bore1_rt_<ses>.csv  (when the bag has Bore1Record messages)
 Columns, order and number formats follow legacy_cols. Columns no topic carries are filled as legacy_cols.NOT_CARRIED
 says.
 """
@@ -16,8 +17,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from . import topics as T
-from .legacy_cols import (CTRL_BOOL, CTRL_COLS, CTRL_ND, CTRL_TRI, OV_COLS, READOUT_COLS, ROWS_COLS, RSI_COLS, f3, f6,
-                          fnd)
+from .legacy_cols import (B1_COLS, CTRL_BOOL, CTRL_COLS, CTRL_ND, CTRL_TRI, OV_COLS, READOUT_COLS, ROWS_COLS,
+                          RSI_COLS, f3, f6, fnd)
 
 
 def stamp_s(stamp) -> float:
@@ -91,6 +92,20 @@ def readout_rows(widths: Iterable, offset: Optional[float]):
     return ro, rows
 
 
+def bore1_rows(records: Iterable, offset: Optional[float]) -> List[list]:
+    """bore1_rt rows from the Bore1Record messages, in frame order. t_frame = stamp - offset (empty without offset)."""
+    from width_readout_bore1.readout import legacy_csv_row
+    from width_readout_bore1.record import record_fields
+    out = []
+    for m in sorted(records, key=lambda m: int(m.frame)):
+        t = stamp_s(m.stamp)
+        row = legacy_csv_row(record_fields(m, t - offset if offset is not None else t))
+        if offset is None:
+            row[1] = ""
+        out.append(row)
+    return out
+
+
 def _write(path: Path, cols, rows) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -98,9 +113,10 @@ def _write(path: Path, cols, rows) -> None:
         w.writerows(rows)
 
 
-def export(msgs: Dict[str, list], out_dir, session: str, meta_path=None, elp_topic: str = T.WIDTH_ELP) -> dict:
-    """Write the five legacy CSVs (and copy session_meta.json). `msgs` maps topic -> messages in bag order.
-    Returns {file name: number of data rows}."""
+def export(msgs: Dict[str, list], out_dir, session: str, meta_path=None, elp_topic: str = T.WIDTH_ELP,
+           bore1_topic: str = T.BORE1_RECORD) -> dict:
+    """Write the five legacy CSVs, bore1_rt when the bag has bore1 records (and copy session_meta.json). `msgs` maps
+    topic -> messages in bag order. Returns {file name: number of data rows}."""
     rd = Path(out_dir) / "roboter" / session
     rd.mkdir(parents=True, exist_ok=True)
     st, rp = msgs.get(T.STATE, []), msgs.get(T.REPLY, [])
@@ -115,8 +131,15 @@ def export(msgs: Dict[str, list], out_dir, session: str, meta_path=None, elp_top
     }
     for name, (cols, rows) in files.items():
         _write(rd / name, cols, rows)
+    counts = {name: len(rows) for name, (_, rows) in files.items()}
+    vd = Path(out_dir) / "raw_video" / session
+    b1 = msgs.get(bore1_topic, [])
+    if b1:
+        vd.mkdir(parents=True, exist_ok=True)
+        rows = bore1_rows(b1, off)
+        _write(vd / f"bore1_rt_{session}.csv", B1_COLS, rows)
+        counts[f"bore1_rt_{session}.csv"] = len(rows)
     if meta_path is not None and Path(meta_path).exists():
-        vd = Path(out_dir) / "raw_video" / session
         vd.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(meta_path, vd / "session_meta.json")
-    return {name: len(rows) for name, (_, rows) in files.items()}
+    return counts

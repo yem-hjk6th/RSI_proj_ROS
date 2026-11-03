@@ -3,9 +3,10 @@
 (a) The legacy eval on the original E1 logs reproduces roboter/eval_v3_20261022_165128.json. Keys that cannot be
     reproduced from this repository are listed in NOT_REPRODUCIBLE with the reason; everything else must be equal
     (floats to 1e-12 relative: the stored file was written with an older pandas).
-(b) The legacy eval on the exported logs gives exactly the result of (a), key for key.
-The bore1 shadow logs (raw_video bore1_rt_ / fusion_<ses>.csv) are not produced from the bag (bore1 is out of scope);
-both runs read the original copies.
+(b) The legacy eval on the exported logs gives exactly the result of (a), key for key. The exported logs include
+    raw_video bore1_rt_<ses>.csv (T11: from the Bore1Record messages; E1 ran plan A_b1, so the eval judges the bore1
+    bins). The fusion shadow log (fusion_<ses>.csv) is not produced from the bag (the fusion shadow is not ported);
+    both runs read the original copy.
 """
 import gzip
 import json
@@ -30,8 +31,9 @@ NOT_REPRODUCIBLE = {
 pytestmark = pytest.mark.skipif(not (e1_available() and EVAL.exists()), reason="E1 data or legacy eval not present")
 
 
-def _layout(root, roboter_src=None):
-    """<root>/roboter/<ses>/*.csv (from roboter_src, else the gzipped originals) + raw_video/<ses>/ originals."""
+def _layout(root, roboter_src=None, bore1_src=None):
+    """<root>/roboter/<ses>/*.csv (from roboter_src, else the gzipped originals) + raw_video/<ses>/ originals
+    (bore1_rt from bore1_src when given)."""
     rd, vd = root / "roboter" / SES, root / "raw_video" / SES
     rd.mkdir(parents=True), vd.mkdir(parents=True)
     for name in ("rsi_data", "ov_cmd", "ctrl", "readout", "readout_rows"):
@@ -41,7 +43,9 @@ def _layout(root, roboter_src=None):
                 shutil.copyfileobj(f, g)
         else:
             shutil.copyfile(roboter_src / f"{name}_{SES}.csv", rd / f"{name}_{SES}.csv")
-    for name in ("bore1_rt", "fusion"):
+    if bore1_src is not None:
+        shutil.copyfile(bore1_src / f"bore1_rt_{SES}.csv", vd / f"bore1_rt_{SES}.csv")
+    for name in ("fusion",) if bore1_src is not None else ("bore1_rt", "fusion"):
         with gzip.open(DATA / "raw_video" / f"{name}_{SES}.csv.gz", "rb") as f, open(vd / f"{name}_{SES}.csv",
                                                                                    "wb") as g:
             shutil.copyfileobj(f, g)
@@ -84,6 +88,6 @@ def test_a_legacy_eval_reproduces_the_stored_result(eval_orig):
 
 def test_b_same_numbers_on_the_exported_logs(eval_orig, e1_export, tmp_path):
     _, out, _ = e1_export
-    got = _eval(_layout(tmp_path / "exp", out / "roboter" / SES))
+    got = _eval(_layout(tmp_path / "exp", out / "roboter" / SES, out / "raw_video" / SES))
     bad = [k for k in sorted(set(got) | set(eval_orig)) if not _eq(got.get(k), eval_orig.get(k))]
     assert not bad, {k: (got.get(k), eval_orig.get(k)) for k in bad}
