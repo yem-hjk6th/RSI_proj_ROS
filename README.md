@@ -32,6 +32,7 @@ the legacy code. The controller-side files are templates marked `NOT RUN`.
 | `krc_eki_bridge` | The same topics over EthernetKRL TCP (route C); KRL/XML templates marked `NOT RUN`. |
 | `krc_replay` | End-to-end replay of a logged session through the ROS graph, and the RSI link latency test. |
 | `print_session` | One launch command for a print session: start-up checks, `session_meta.json`, rosbag2 recording, export to the legacy logs. |
+| `camera_capture` | Camera capture and recording in one process per camera (legacy file formats: HEVC / MJPG AVI / mp4v segments, frame CSVs), image and preview topics, 2×2 preview window. |
 
 ## Layout
 

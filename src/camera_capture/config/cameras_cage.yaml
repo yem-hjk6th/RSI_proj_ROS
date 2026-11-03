@@ -1,0 +1,85 @@
+# The cage from 2026-10-27 on: two ELP cameras (A and B sides) and two borescopes. Which of them a session records is
+# the lab's choice: copy this file and delete the sections not used. NOT tested on hardware.
+#
+#   ros2 launch print_session bringup.launch.py mode:=closed params_file:=config/e1.yaml \
+#       cameras:=<copy of this file> preview:=true
+#
+# File names: with several cameras of a kind every camera gets a tag after the session name (legacy pipeline.py
+# cam_tags): elp_<ses>_b_001_<start>.mp4, elp_frames_<ses>_b.csv, bore_<ses>_cam1_001_<start>.mp4, ...
+# The ELP of side A keeps the E1 names and the topic /elp/image_raw that width_readout_elp reads.
+# Device paths are placeholders (see cameras_e1.yaml). Both ELPs report the same name and USB serial, so only their
+# by-path links (the USB port) tell them apart: check the mapping after every re-plug or usbipd attach.
+# Preview window (preview:=true): pair 1 (elp, bore1) on the left, pair 2 (elp_b, bore2) on the right.
+elp:
+  ros__parameters:
+    kind: elp
+    device: /dev/v4l/by-path/<ELP_A_USB_PORT>-video-index0     # placeholder
+    fourcc: MJPG
+    width: 1920
+    height: 1200
+    fps: 60.0
+    controls: [auto_exposure=1, exposure_time_absolute=78, gain=0, white_balance_automatic=0,
+               white_balance_temperature=4600]
+    file_prefix: elp
+    csv_prefix: elp_frames
+    tag: ""
+    codec: hevc
+    segment_s: 60.0
+    cq: 18
+    fps_tag: 78.4
+    queue_frames: 256
+    wait_for_rsi: true
+
+bore1:
+  ros__parameters:
+    kind: borescope
+    device: /dev/v4l/by-id/<BORE1_ID>-video-index0              # placeholder
+    fourcc: ""
+    width: 1280
+    height: 720
+    fps: 30.0
+    file_prefix: bore
+    csv_prefix: borescope_frames
+    tag: _cam1
+    codec: mp4v
+    segment_s: 900.0
+    queue_frames: 64
+    wait_for_rsi: true
+
+elp_b:
+  ros__parameters:
+    kind: elp
+    device: /dev/v4l/by-path/<ELP_B_USB_PORT>-video-index0     # placeholder
+    fourcc: MJPG
+    width: 1920
+    height: 1200
+    fps: 60.0
+    controls: [auto_exposure=1, exposure_time_absolute=78, gain=0, white_balance_automatic=0,
+               white_balance_temperature=4600]
+    file_prefix: elp
+    csv_prefix: elp_frames
+    tag: _b
+    codec: hevc
+    segment_s: 60.0
+    cq: 18
+    fps_tag: 78.4
+    queue_frames: 256
+    wait_for_rsi: true
+    publish_raw: false            # no readout on side B yet: no raw image copies
+
+bore2:
+  ros__parameters:
+    kind: borescope
+    device: /dev/v4l/by-id/<BORE2_ID>-video-index0              # placeholder
+    fourcc: ""
+    width: 1280
+    height: 720
+    fps: 30.0
+    file_prefix: bore
+    csv_prefix: borescope_frames
+    tag: _cam2
+    codec: mp4v
+    segment_s: 900.0
+    queue_frames: 64
+    wait_for_rsi: true
+    publish_raw: false

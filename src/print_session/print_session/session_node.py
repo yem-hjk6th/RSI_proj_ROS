@@ -1,13 +1,14 @@
 """print_session node: the session's lifecycle on the edge PC (legacy run_cl.main without the camera / recorder code).
 
 At start it repeats the start-up plan (print_session.startup: same checks as the launch) and writes
-<session_dir>/session_meta.json with the "realtime" block, before the robot moves. It then watches /krc/state and
+<session_dir>/session_meta.json with the "realtime" block, before the robot moves. The camera nodes write their own
+"cameras.<name>" blocks into the same file; every write is a locked read-modify-write (camera_capture.session_meta),
+so no process overwrites another one's block. It then watches /krc/state and
 /controller/ctrl_record:
 - once RSI has connected, a gap of disconnect_timeout_s without a packet ends the session (run_cl.py:882-884);
 - at the end (RSI gone, Ctrl+C or launch shutdown) it adds "v3_summary" (n_corr, n_switch, n_updates from the last
   CtrlRecord, run_cl.py:900-902) and exits. The bringup shuts the other nodes and the recorder down when it exits.
 """
-import json
 import time
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 
+from camera_capture.session_meta import merge_meta, update_meta
 from krc_interfaces.msg import CtrlRecord, KrcState
 
 from . import topics as T
@@ -24,23 +26,12 @@ from .startup import SESSION_PARAMS, load_params, plan
 META = "session_meta.json"
 
 
-def write_meta(path: Path, meta: dict) -> None:
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(meta, indent=2, default=float), encoding="utf-8")
-    tmp.replace(path)
-
-
-def update_meta(path: Path, key: str, value) -> None:
-    meta = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    meta[key] = value
-    write_meta(path, meta)
-
-
 class SessionNode(Node):
     def __init__(self, parameter_overrides=None):
         super().__init__("print_session", parameter_overrides=parameter_overrides)
         for k, v in dict(params_file="", mode="", session="", session_dir="", image_topic="/elp/image_raw",
-                         bag="", camera="", status_period_s=5.0, **SESSION_PARAMS).items():
+                         bag="", camera="", cameras="", cameras_file="", readout=True, status_period_s=5.0,
+                         **SESSION_PARAMS).items():
             self.declare_parameter(k, v)
         g = lambda k: self.get_parameter(k).value  # noqa: E731
         self.dir = Path(g("session_dir"))
@@ -51,11 +42,14 @@ class SessionNode(Node):
             self.get_logger().warning(line)
         self.timeout_s = float(g("disconnect_timeout_s"))
         meta = {k: (g(k) or None) for k in ("src_name", "ceiling_light")}     # run_cl --src-name / --ceiling-light
-        write_meta(self.meta_path, {
+        merge_meta(self.meta_path, {
             **meta,
             "realtime": p.realtime,
             "print_session": dict(session=g("session"), start_epoch=time.time(), params_file=Path(g("params_file")).name,
-                                  image_topic=g("image_topic"), camera=g("camera"), bag=g("bag"),
+                                  image_topic=g("image_topic"), readout=bool(g("readout")), camera=g("camera"),
+                                  cameras=[c for c in g("cameras").split(",") if c],
+                                  cameras_file=Path(g("cameras_file")).name if g("cameras_file") else "",
+                                  raw_video="raw_video" if g("cameras") else "", bag=g("bag"),
                                   storage_id=T.STORAGE_ID, record_regex=T.RECORD_REGEX,
                                   disconnect_timeout_s=self.timeout_s, bore1_readout=bool(g("bore1_readout"))),
         })
@@ -98,9 +92,8 @@ class SessionNode(Node):
         summary = dict(n_corr=int(r.n_corr), n_switch=int(r.n_switch), n_updates=int(r.n_upd)) if r is not None \
             else dict(n_corr=None, n_switch=None, n_updates=0)
         update_meta(self.meta_path, "v3_summary", summary)
-        update_meta(self.meta_path, "print_session",
-                    {**json.loads(self.meta_path.read_text(encoding="utf-8")).get("print_session", {}),
-                     "end_epoch": time.time(), "end_reason": self.reason or "shutdown", "rsi_packets": self.n_pkt})
+        for k, v in dict(end_epoch=time.time(), end_reason=self.reason or "shutdown", rsi_packets=self.n_pkt).items():
+            update_meta(self.meta_path, ("print_session", k), v)
         self.get_logger().info(f"DONE session: {self.meta_path}")
 
 

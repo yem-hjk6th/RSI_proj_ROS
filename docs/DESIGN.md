@@ -49,6 +49,7 @@ run on hardware. **planned** = not in the repository yet.
 | `krc_eki_bridge` | ament_python | – | Same topics as the RSI bridge, over EthernetKRL TCP. KRL/XML templates marked NOT RUN. | implemented (templates NOT RUN) |
 | `krc_replay` | ament_python | – | End-to-end replay of a logged session through the ROS graph: `log_player` node (lock-step and real-time), equivalence and safety tests. Also the RSI link latency test (`latency_test` CLI, `latency_bridge.launch.py`). | implemented |
 | `print_session` | ament_python | `run_cl.py` | Session lifecycle: one bringup launch with the start-up checks and refusals of `run_cl.py`, `session_meta.json`, rosbag2 recording (mcap) of the record topics, `bag_to_legacy` export to the legacy CSV logs. Warns at start-up in shadow mode (no OvCmd: 1 % on `RSI_OV4`). | implemented |
+| `camera_capture` | ament_python | `pipeline_cage1012/elp.py`, `borescope.py`, `realtime_cl_261023/elp_hevc.py` | One node per camera (V4L2 by a stable device path, controls read back), recording in the same process (ELP: HEVC via `ffmpeg` `hevc_nvenc`, MJPG AVI fallback; borescopes: mp4v) with the legacy frame CSVs; image topics with capture-time stamps, 5 Hz previews, a 2×2 preview window | implemented (not run with a camera) |
 | `width_readout_bore1` | ament_python | `bore1/` | GPU head; weights are not in this repository | planned |
 
 ## 5. Interfaces (contract; change only through a PR to `krc_interfaces`)
@@ -111,9 +112,12 @@ list is in `src/krc_interfaces/msg/CtrlRecord.msg`.
 | `/controller/ctrl_record` | `CtrlRecord` | `cl_controller` | implemented |
 | `/width/elp` | `Width` | `width_readout_elp`, `log_player` | implemented |
 | `/width/bore1` | `Width` | `width_readout_bore1` (planned), `log_player` | replay only |
+| `/<camera>/image_raw` | `sensor_msgs/Image` (`bgr8`, stamp = capture time on the clock of `KrcState.stamp`) | `camera_capture` (`/elp/image_raw`, `/bore1/image_raw`, ...) | implemented |
+| `/<camera>/preview` | `sensor_msgs/Image` (5 Hz, 640 px wide) | `camera_capture` | implemented |
 
 `print_session` records `/krc/state`, `/krc/override_cmd`, `/krc/reply_record`, `/controller/ctrl_record` and
-`/width/*`.
+`/width/*`. Images are not in the bag: the camera nodes record the video and the frame CSVs to
+`<session>/raw_video/` in the legacy formats.
 
 ## 6. Safety invariants
 

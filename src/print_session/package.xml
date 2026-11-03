@@ -15,12 +15,13 @@
   <exec_depend>krc_rsi_bridge</exec_depend>
   <exec_depend>cl_controller</exec_depend>
   <exec_depend>width_readout_elp</exec_depend>
+  <exec_depend>camera_capture</exec_depend>
   <exec_depend>ros2bag</exec_depend>
   <exec_depend>rosbag2_py</exec_depend>
   <exec_depend>rosbag2_storage_mcap</exec_depend>
   <exec_depend>rosidl_runtime_py</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
-  <!-- The camera driver (usb_cam, ros-jazzy-usb-cam) is optional: only start_camera:=true needs it. -->
+  <!-- usb_cam (ros-jazzy-usb-cam) is optional: only start_camera:=true needs it; cameras:= uses camera_capture. -->
 
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-pandas</test_depend>
