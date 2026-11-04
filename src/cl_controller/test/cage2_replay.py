@@ -7,8 +7,11 @@ Controller._update / port Controller.update, both end with the command), in betw
 _command / port command()). The OvCmd of a step is what the legacy step() publishes: ov_default while the controller
 sees "outside", else its OvCmd.
 
-`explain_live` runs the legacy controller and compares every update with the live ctrl log; where they differ it
-retries the update with the next bore push advanced to before it (module docstring of test_golden_bduo.py).
+`explain_live` runs the legacy controller and compares every update with the live ctrl log; where OvCmd, n_bins or u
+differ it retries the update with the next bore push advanced to before it (module docstring of test_golden_bduo.py).
+With `probes`, it also probes every update whose w_est or rhat differs from the live log by more than the rounding of
+the logged inputs allows (`w_est_bound`, `rhat_bound`): the same update on a copy of the state before it, with the next
+bore push advanced. A probe is a side calculation; the replay continues from the unprobed update.
 """
 import copy
 import math
@@ -178,16 +181,50 @@ def run(ctl, steps, pk, ros):
 ADVANCE_MAX_S = 0.003       # a bore push logged at most this long after the update stamp may have been read by it
 
 
+# Rounding of the logged values. Every width the replay pushes (bore1_rt / bore2_rt w, readout_rows w) is printed with
+# 4 decimals, so its log is off by at most W_HALF / W_MIN_LOGGED; w_est (exp of a mean of medians of log w) and rhat
+# (a mean of log w / alpha_m plus terms that do not depend on w) move by at most that much in log w, and both are
+# printed with 4 / 5 decimals themselves.
+W_HALF, RHAT_HALF = 0.5e-4, 0.5e-5
+W_MIN_LOGGED = 4.34     # mm, below the smallest width pushed in the session (4.3475, ELP-B; test_golden_bduo checks it)
+
+
+def w_est_bound(w_est):
+    return w_est * math.expm1(W_HALF / W_MIN_LOGGED) + W_HALF + 1e-9
+
+
+def rhat_bound(alpha_m):
+    return W_HALF / W_MIN_LOGGED / alpha_m + RHAT_HALF + 1e-9
+
+
+def float_off(row, live, k, alpha_m):
+    """w_est or rhat of a replay row differs from the live row k by more than the rounding bounds."""
+    a, b = row["w_est"], float(live["w_est"][k])
+    if math.isnan(a) != math.isnan(b):
+        return True
+    if not math.isnan(a) and abs(a - b) > w_est_bound(b):
+        return True
+    a, b = row["rhat"], float(live["rhat"][k])
+    if math.isnan(a) != math.isnan(b):
+        return True
+    return not math.isnan(a) and abs(a - b) > rhat_bound(alpha_m)
+
+
 def _differs(row, live, k, u_tol):
     return (row["ov_pub"] != int(live["ov_pub"][k]) or row["n_bins"] != int(live["n_bins"][k])
             or abs(row["u"] - float(live["u"][k])) > u_tol)
 
 
-def explain_live(live, pk, ros, u_tol=6e-5):
+def explain_live(live, pk, ros, u_tol=6e-5, probes=None):
     """Legacy replay at the logged update times, compared with the live ctrl log (`live`: DataFrame) at every update.
-    Returns (rows, advanced, unexplained): `advanced` = {update index: (source, push time - update time)} where the
-    live log is reproduced only with the next bore push applied before the update."""
+    Returns (rows, advanced, unexplained, legacy): `advanced` = {update index: (source, push time - update time)} where
+    the live log is reproduced only with the next bore push applied before the update.
+
+    `probes` (a dict, filled in place): {update index: None, or (row, source, push time - update time)} for every
+    update outside `advanced` whose w_est or rhat is off (`float_off`): the update rerun from the state before it with
+    the next bore push advanced (None: no bore push within ADVANCE_MAX_S)."""
     L = Legacy()
+    alpha_m = L.cfg.alpha_m
     tu = live["t_perf"].to_numpy(float)
     pt, pi, px = pk
     ip = ir = 0
@@ -210,6 +247,7 @@ def explain_live(live, pk, ros, u_tol=6e-5):
         snap = copy.deepcopy((L.ctrl, L.ring))
         L.update(t)
         row = L.row(t)
+        pre = copy.deepcopy(snap) if probes is not None and float_off(row, live, k, alpha_m) else None
         if _differs(row, live, k, u_tol):
             nxt = next((j for j in range(ir, len(ros)) if j not in skip and ros[j].src in ("bore1", "bore2")), None)
             ok = False
@@ -228,5 +266,15 @@ def explain_live(live, pk, ros, u_tol=6e-5):
                     row = L.row(t)
             if not ok:
                 unexplained.append(k)
+        if pre is not None and k not in advanced and float_off(row, live, k, alpha_m):
+            nxt = next((j for j in range(ir, len(ros)) if j not in skip and ros[j].src in ("bore1", "bore2")), None)
+            probes[k] = None
+            if nxt is not None and ros[nxt].t - t <= ADVANCE_MAX_S:
+                main = L.ctrl, L.ring
+                L.ctrl, L.ring = pre
+                L.push(ros[nxt])
+                L.update(t)
+                probes[k] = (L.row(t), ros[nxt].src, ros[nxt].t - t)
+                L.ctrl, L.ring = main
         rows.append(row)
     return rows, advanced, unexplained, L

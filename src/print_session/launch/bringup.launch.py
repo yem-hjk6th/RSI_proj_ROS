@@ -75,9 +75,10 @@ def _setup(context):
     acts.append(Node(package="cl_controller", executable="controller_node", name=CONTROLLER, output="screen",
                      parameters=[params_file, p.controller]))
     camera = ""
+    meta = str(sdir / "session_meta.json")     # the readouts write their gate logs next to it (semi patterns)
     if p.readout is not None:
         acts.append(Node(package="width_readout_elp", executable="width_readout_elp_node", name=READOUT,
-                         output="screen", parameters=[params_file, p.readout]))
+                         output="screen", parameters=[params_file, dict(p.readout, session_meta=meta)]))
         if usb_cam:
             camera = "usb_cam"
             cam_params = [arg("camera_params")] if arg("camera_params") else []
@@ -85,12 +86,12 @@ def _setup(context):
                              parameters=cam_params, remappings=[("image_raw", image_topic)]))
     if p.readout_b is not None:
         acts.append(Node(package="width_readout_elp", executable="width_readout_elp_node", name=READOUT_B,
-                         output="screen", parameters=[params_file, p.readout_b]))
+                         output="screen", parameters=[params_file, dict(p.readout_b, session_meta=meta)]))
     for name, over, need in ((BORE1, p.bore1, p.needs_bore1), (BORE2, p.bore2, p.needs_bore2)):
         if over is None:
             continue
         bore = Node(package="width_readout_bore1", executable="width_readout_bore1_node", name=name, output="screen",
-                    parameters=[params_file, dict(over, session_meta=str(sdir / "session_meta.json"))])
+                    parameters=[params_file, dict(over, session_meta=meta)])
         acts.append(bore)
         acts.append(RegisterEventHandler(OnProcessExit(
             target_action=bore, on_exit=lambda ev, ctx, need=need, name=name: _bore1_exit(ev, ctx, need, name))))

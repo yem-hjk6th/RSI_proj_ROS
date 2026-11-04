@@ -148,6 +148,18 @@ def test_gate_log_cross_check(port):
     assert (m.obs_curv == m.curv_obs).all() and (m.obs_lobe == m.lobe_obs).all()
 
 
+def test_gate_log_check_per_camera_files(port, tmp_path):
+    """T13 review (PR #42): the ROS readout nodes write one gate log per camera (semi_gate_<camera>.csv, next to
+    session_meta.json). Split into those files, the ARC2 gate log gives the same cross-check as the legacy file."""
+    from path_geometry.failure_map import Session, gate_log_check
+    G = pd.read_csv(ARC2 / "roboter" / f"semi_gate_{ARC2_SES}.csv.gz", dtype=str, keep_default_na=False)
+    for cam, name in (("bore1", "bore1"), ("bore2", "bore2"), ("elpA", "elp"), ("elpB", "elp_b")):
+        G[G.cam == cam].to_csv(tmp_path / f"semi_gate_{name}.csv", index=False)
+    m = gate_log_check(port["bore"], Session(tmp_path, ARC2_SES))
+    assert m is not None and len(m) == len(port["bore"]) == 3224
+    assert np.abs(m.obs_delta - m.delta_obs).max() <= 0.01
+
+
 def test_bin_option(tmp_path):
     out = tmp_path / "b30"
     assert main(["--session", str(ARC2), "--out", str(out), "--bin", "30"]) == 0

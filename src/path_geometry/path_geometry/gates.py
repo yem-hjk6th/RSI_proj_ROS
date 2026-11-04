@@ -55,6 +55,7 @@ import csv
 import math
 import threading
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Tuple
 
 import numpy as np
@@ -219,15 +220,31 @@ def gate_log_values(cam: str, t: float, line, s_tip: float, e: float, back: floa
 
 
 class GateLog:
-    """The gate log csv (``semi_geom._GateLog``): header at open, one row per gated frame, flushed every 200 rows
-    and at close. Thread-safe. Only for semi patterns (``needs_gate_log``)."""
+    """The gate log csv (``semi_geom._GateLog``): header when the file is new, one row per gated frame, flushed every
+    200 rows and at close. Thread-safe. Only for semi patterns (``needs_gate_log``).
+
+    An existing file is appended to, never truncated (a node restarted into the same session folder keeps the earlier
+    rows; the legacy wrote one file per session). An existing file with another header raises ``ValueError``."""
 
     def __init__(self, path, flush_every: int = 200):
         self.path, self.flush_every = path, int(flush_every)
         self._lock = threading.Lock()
-        self._f = open(path, "w", newline="", encoding="utf-8")
+        p = Path(path)
+        new = not p.exists() or p.stat().st_size == 0
+        if not new:
+            with open(p, newline="", encoding="utf-8") as f:
+                head = next(csv.reader(f), None)
+            if head != GATE_LOG_COLS:
+                raise ValueError(f"gate log {p} exists with another header; not appending to it")
+            with open(p, "rb") as f:
+                f.seek(-1, 2)
+                ends_nl = f.read(1) == b"\n"
+        self._f = open(p, "a", newline="", encoding="utf-8")
+        if not new and not ends_nl:         # a run that stopped mid-row: start the next row on its own line
+            self._f.write("\r\n")
         self._w = csv.writer(self._f)
-        self._w.writerow(GATE_LOG_COLS)
+        if new:
+            self._w.writerow(GATE_LOG_COLS)
         self.n = 0
 
     def row(self, cam: str, t: float, g: PathGate) -> None:

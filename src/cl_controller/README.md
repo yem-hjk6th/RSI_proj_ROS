@@ -51,7 +51,10 @@ active only with a pattern whose segs csv has a `z_off` column; single-layer pat
 - `PrintWindow`: opens on layer 1 as before; closes at the last print point only at the planned last Z (`last_z` of
   the pattern json): a wall passes its last x / y on every layer.
 - `control_sources` (`LawCfg.sources`): the sources that may steer. Walls use `elp`: the bore1 head is a layer-1 model;
-  bore1 is still estimated and logged (`valid_b1`), but never takes control.
+  bore1 is still estimated and logged (`valid_b1`), but never takes control. Items are stripped as in `run_cl.py`
+  (`"bore1, elp"` = `"bore1,elp"`).
+- `elp_b on` (cage 2) is refused with a multi-layer pattern: the cage-2 line lookup (`_where2`) uses the layer-1
+  geometry, so above layer 1 every leg would be held.
 - `sat_stop_s` (`CtrlCfg.sat_s`, `sat_min_dz` 0.6 mm), the wall stop rule: on a seen leg of layer >= 2 (planned offset
   >= `sat_min_dz`), OvCmd from the feedback (plan not `Bpp`) at `ov_max` for `sat_s` in a row latches forced open
   loop like the speed check (`sat_alarm`; the node then publishes source `forced`, which the bridge latches). Default

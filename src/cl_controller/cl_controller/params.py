@@ -16,7 +16,9 @@ with valid false; the offset is added to the published width); print_session han
 refusal of a missing --elp-b is print_session's (cage2: the controller section must set elp_b), because this node also
 runs the E1 and wall programs, where elp_b off is the behaviour they ran with.
 
-Patterns with "geometry" (fan / semicircle, path_geometry) are refused until their controller exists (T16).
+Patterns with "geometry" (fan / semicircle, path_geometry) are refused until their controller exists (T16). elp_b on
+with a multi-layer (walls) pattern is refused too (not a run_cl.py refusal): the cage-2 line lookup uses the layer-1
+geometry, so above layer 1 control would be lost without a message.
 """
 import math
 from typing import Dict, Tuple
@@ -136,6 +138,9 @@ def cage2_refusals(p: dict, law_cfg: LawCfg, pat: Pattern) -> None:
         raise Refused(f"b_from_leg {p['b_from_leg']}: need >= 1 (the law controls legs >= 1 only)")
     if elp_b == "on" and law_cfg.sources and "elp" not in law_cfg.sources.split(","):     # run_cl.py 1212-1213
         raise Refused("elp_b on needs elp in control_sources (ELP-B is the only source on the +X lines)")
+    if elp_b == "on" and pat.ml and len(pat.dz_levels) > 1:                    # not in run_cl.py (T15 review, PR #43)
+        raise Refused(f"elp_b on: pattern {pat.src} is multi-layer ({len(pat.dz_levels)} layers): the cage-2 line "
+                      f"lookup (_where2) uses the layer-1 geometry, so above layer 1 every leg would be held")
     if elp_b == "on" and not len(pat.b_ids):                                                # run_cl.py 1296-1298
         raise Refused(f"elp_b on: pattern {pat.src} has no kind-B (+X) lines in its segs csv")
 
@@ -173,8 +178,8 @@ def build_law_cfg(p: dict) -> LawCfg:
     lc.tau_slow, lc.tau_model, lc.start_mix = float(p["tau_slow"]), float(p["tau_model"]), float(p["start_mix"])
     lc.guard_bed, lc.tgt_schedule = bool(p["guard_bed"]), p["target_schedule"]
     lc.blind_tau, lc.blind_ref, lc.blind_dir = float(p["blind_tau"]), p["blind_ref"], p["blind_dir"]
-    if str(p["control_sources"]).strip():
-        lc.sources = str(p["control_sources"])
+    if str(p["control_sources"]).strip():                  # run_cl.py 590 / 596: items stripped, empty ones dropped
+        lc.sources = ",".join(x.strip() for x in str(p["control_sources"]).split(",") if x.strip())
     if p["force_seg"]:
         fs = {}
         for part in str(p["force_seg"]).split(","):

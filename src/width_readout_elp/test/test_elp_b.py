@@ -202,3 +202,44 @@ def test_rig_role_check():
         check_rig_role("A", "rig_cage2opt_elpB_261102.json")
     with pytest.raises(ValueError):
         check_rig_role("B", "rig_cage2opt_elpA_261102_m2.json")
+
+
+def test_rig_role_by_content_or_folder_not_by_name(tmp_path):
+    """T15 review (PR #43): the role comes from the rig itself, not from a substring of its file name. The E1 rig
+    rig_cage1012.json (the ELP-A unit) is not accepted as the ELP-B rig; a rig without a determinable role is
+    refused."""
+    import json
+    import shutil
+    from width_readout_elp.config import rig_role, role_rig_json
+    e1 = default_rig_json()
+    assert rig_role(e1) == "elpA"
+    check_rig_role("A", e1)
+    with pytest.raises(ValueError, match="elpA rig"):
+        check_rig_role("B", e1)
+    assert rig_role(role_rig_json("elpA")) == "elpA" and rig_role(role_rig_json("elpB")) == "elpB"
+    # a copy of the ELP-A rig under a name that says elpB: still ELP-A (content)
+    d = tmp_path / "lab"
+    shutil.copytree(role_rig_json("elpA").parent, d)
+    misnamed = d / "rig_cage2opt_elpB_lab.json"
+    shutil.copyfile(role_rig_json("elpA"), misnamed)
+    assert rig_role(misnamed) == "elpA"
+    with pytest.raises(ValueError, match="role"):
+        check_rig_role("B", misnamed)
+    # a changed rig outside the package: refused, whatever its name, unless it says its role
+    data = json.loads(role_rig_json("elpB").read_text(encoding="utf-8"))
+    data["lat_s"] = 0.06
+    lab = d / "rig_elpB_recal.json"
+    lab.write_text(json.dumps(data), encoding="utf-8")
+    assert rig_role(lab) is None
+    for kind in ("A", "B"):
+        with pytest.raises(ValueError, match="cannot be determined"):
+            check_rig_role(kind, lab)
+    lab.write_text(json.dumps({**data, "role": "elpB"}), encoding="utf-8")
+    check_rig_role("B", lab)
+    with pytest.raises(ValueError, match="elpB rig"):
+        check_rig_role("A", lab)
+    lab.write_text(json.dumps({**data, "role": "elpC"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="cannot be determined"):
+        check_rig_role("B", lab)
+    with pytest.raises(ValueError, match="cannot be determined"):
+        check_rig_role("A", tmp_path / "missing.json")

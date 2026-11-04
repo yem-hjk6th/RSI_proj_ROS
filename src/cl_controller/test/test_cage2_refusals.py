@@ -121,6 +121,26 @@ def test_refused_pattern_without_b_lines_run_cl_1296(tmp_path):
     build_configs({**defaults(), "mode": "closed", "plan": "A"}, pat)  # elp_b off: no B lines needed
 
 
+def test_refused_elp_b_with_multi_layer_pattern():
+    """T15 review (PR #43): _where2 uses the layer-1 geometry, so with a wall pattern the -X legs above layer 1 would
+    be held (u held, control lost without a message). Not a legacy refusal; elp_b off keeps the wall behaviour."""
+    from walls_sim import WALL_CL
+    pat = load_pattern(WALL_CL)
+    assert pat.ml and len(pat.dz_levels) > 1 and len(pat.b_ids)
+    for p in (dict(), dict(bore2="off", bore_sd_max=math.inf)):
+        with pytest.raises(Refused, match="multi-layer"):
+            _build(pat, **p)
+    cfg, _, _ = build_configs({**defaults(), "mode": "closed", "plan": "A", "control_sources": "elp"}, pat)
+    assert not cfg.elp_b and cfg.sat_s == 2.0
+
+
+def test_control_sources_spaces_stripped_run_cl_590():
+    """run_cl.py 590 / 596 strip the items of --control-sources: "bore1, elp" with elp_b on is the session's list."""
+    for given in ("bore1, elp", " elp ,bore1 ", "elp,bore1,"):
+        cfg, lc, _ = _build(control_sources=given)
+        assert cfg.elp_b and lc.sources == ",".join(x.strip() for x in given.split(",") if x.strip())
+
+
 def test_refused_sources_without_primary_run_cl_594():
     with pytest.raises(Refused, match="control_sources"):
         _build(control_sources="elp")                                  # plan A_b1: primary bore1

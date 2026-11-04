@@ -270,9 +270,9 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
     if cage2 and image_topic:
         rb_file = params.get(READOUT_B, {})
         rig_b = Path(rb_file.get("rig_json") or role_rig("elpB"))
-        _rig_role("B", rig_b, READOUT_B)
         if _same_file(rig_b, rig):
             raise Refused(f"{READOUT}.rig_json and {READOUT_B}.rig_json are the same file {rig}: one rig per role")
+        _rig_role("B", rig_b, READOUT_B)
         if rb_file.get("pattern_json") and not _same_file(rb_file["pattern_json"], pj):
             raise Refused(f"{READOUT_B}.pattern_json {rb_file['pattern_json']} is not the controller's pattern {pj}")
         for k, want in (("kind", "B"), ("width_topic", "/width/elp_b"), ("camera", "elp_b")):

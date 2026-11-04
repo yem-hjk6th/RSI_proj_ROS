@@ -10,16 +10,18 @@ subscription keeps only the newest frame (depth 1), so the readout never falls b
 
 Fan and semicircle patterns (T13): when the pattern json has ``"geometry"`` ``fan`` or ``semi``, the node uses
 ``path_readout.PathReadout`` (ELP-A on the A legs: gate by projection on the lines / rows, grid along the path); every
-other pattern runs ``readout.RtReadout`` unchanged. ``pattern_json`` is a path, or a file name in path_geometry's
-``patterns/``. For a semi pattern with ``gate_log_dir`` set, the gate log goes to
-``<gate_log_dir>/semi_gate_<camera>.csv`` (legacy ``semi_gate_<ses>.csv`` columns; one file per camera node).
+other pattern runs ``readout.RtReadout`` unchanged; any other ``"geometry"`` value is refused. ``pattern_json`` is a
+path, or a bare file name in path_geometry's ``patterns/``. For a semi pattern the gate log goes to
+``<gate_log_dir>/semi_gate_<camera>.csv`` (legacy ``semi_gate_<ses>.csv`` columns; one file per camera node); with
+``gate_log_dir`` empty, next to ``session_meta`` (the session logs, as width_readout_bore1; print_session sets it); no
+log without either. An existing gate log is appended to (a restarted node does not truncate it).
 
 ELP-B (cage 2, T15): ``kind: B`` reads the +X lines with ``readout.RtReadoutB`` (MDF band half ``b_mdf_side``, default
 ``pos``). Its rig defaults to the packaged ELP-B rig (``config.ROLE_RIGS``; rigs are bound to the camera role). Run it
 as a second node of this package (name ``width_readout_elp_b``) with its own topics: ``camera: elp_b``,
 ``image_topic: /elp_b/image_raw``, ``width_topic: /width/elp_b``. Refused: kind B on ``/width/elp`` or kind A on
-``/width/elp_b`` (the controller would read the rows as the other camera's), a rig named for the other role, and kind B
-on a pattern without B lines.
+``/width/elp_b`` (the controller would read the rows as the other camera's), a rig of the other role or of no
+determinable role (``config.rig_role``), and kind B on a pattern without B lines.
 """
 import math
 
@@ -32,7 +34,7 @@ from sensor_msgs.msg import Image
 
 from krc_interfaces.msg import KrcState, Width
 
-from .config import MDF_SIDES, check_rig_role, default_pattern_json, make_readout, rig_for
+from .config import MDF_SIDES, check_rig_role, default_pattern_json, gate_log_folder, make_readout, rig_for
 from .image import image_to_bgr
 from .readout import used_rows
 from .rsi_ring import RsiRing
@@ -82,7 +84,7 @@ class WidthReadoutElp(Node):
         root = p("root", "").value or None
         self.d_min = float(p("d_min", 12.0).value)
         self.use_header_stamp = bool(p("use_header_stamp", True).value)
-        gate_log_dir = p("gate_log_dir", "").value
+        gate_log_dir = gate_log_folder(p("gate_log_dir", "").value, p("session_meta", "").value)
 
         try:
             self.readout, self.gate_log = make_readout(rig, pattern, root, gate_log_dir, self.camera, self.kind,

@@ -384,14 +384,26 @@ def find_pattern(name) -> Path:
 
 def is_path_pattern(path) -> bool:
     """True when the pattern json at ``path`` has ``"geometry"`` ``semi`` or ``fan`` (the readouts gate it with
-    ``gates``); every other pattern runs the readouts' straight-leg code."""
+    ``gates``); False without a ``"geometry"`` key (the readouts' straight-leg code). Any other ``"geometry"`` value
+    (e.g. ``arc``, which the legacy run_cl.py also handles) raises ``ValueError``: it is not run through the
+    straight-leg gates."""
     c = json.loads(Path(path).read_text(encoding="utf-8"))
-    return c.get("geometry") in GEOMETRIES
+    geo = c.get("geometry")
+    if geo is None:
+        return False
+    if geo not in GEOMETRIES:
+        raise ValueError(f"{path}: geometry {geo!r} is not one of {GEOMETRIES}; refused (the straight-leg gates do "
+                         f"not apply to it)")
+    return True
 
 
 def pattern_path(value) -> Path:
-    """A pattern json given as a path (used as is when the file exists) or by file name (:func:`find_pattern`)."""
+    """A pattern json given as a path (used as is when the file exists) or by file name (:func:`find_pattern`). A
+    value with a folder part that is not a file raises ``FileNotFoundError`` (no fallback to the packaged pattern of
+    the same name)."""
     p = Path(value)
     if p.is_file():
         return p
+    if p.name != str(value):
+        raise FileNotFoundError(f"pattern {value}: no such file")
     return find_pattern(value)

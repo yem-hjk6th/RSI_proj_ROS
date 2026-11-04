@@ -22,7 +22,7 @@ The summary ``failuremap_summary_<ses>.csv`` has a column ``basis``:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -73,6 +73,7 @@ class Session:
         self.root = Path(root)
         meta = self._meta_path(ses)
         self.meta = None
+        self.meta_path = meta
         if meta is not None:
             import json
             self.meta = json.loads(meta.read_text(encoding="utf-8"))
@@ -216,12 +217,35 @@ def summary(B: pd.DataFrame, E: pd.DataFrame, F: pd.DataFrame, width: float = BI
     return S
 
 
+GATE_LOG_CAMERAS = ("bore1", "bore2", "elp", "elp_b")     # the camera parameter of the ROS readout nodes
+
+
+def gate_log_files(sess: Session) -> List[Path]:
+    """The gate logs of a session: the legacy ``roboter/semi_gate_<ses>.csv``, else the per-camera files
+    ``semi_gate_<camera>.csv`` the ROS readout nodes write (``camera`` in GATE_LOG_CAMERAS; next to session_meta.json,
+    or in roboter/ or raw_video/), each ``.csv`` or ``.csv.gz``."""
+    legacy = sess.csv("roboter", "semi_gate_{ses}")
+    if legacy is not None:
+        return [legacy]
+    dirs: List[Path] = []
+    for d in (sess.root, sess.rdir, sess.vdir, sess.meta_path.parent if sess.meta_path else None):
+        if d is not None and Path(d) not in dirs:
+            dirs.append(Path(d))
+    out = []
+    for cam in GATE_LOG_CAMERAS:
+        p = next((p for p in (find_csv(d, f"semi_gate_{cam}") for d in dirs) if p is not None), None)
+        if p is not None:
+            out.append(p)
+    return out
+
+
 def gate_log_check(B: pd.DataFrame, sess: Session) -> Optional[pd.DataFrame]:
-    """bore rows joined on (cam, t) with the gate log ``semi_gate_<ses>.csv`` (None without a gate log)"""
-    gl = sess.csv("roboter", "semi_gate_{ses}")
-    if gl is None or B.empty:
+    """bore rows joined on (cam, t) with the gate log (``gate_log_files``: the legacy ``semi_gate_<ses>.csv`` or the
+    per-camera ``semi_gate_<camera>.csv``; None without a gate log)"""
+    files = gate_log_files(sess)
+    if not files or B.empty:
         return None
-    G = pd.read_csv(gl)
+    G = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
     return B.merge(G[G.cam.isin(["bore1", "bore2"])], left_on=["cam", "t_frame"], right_on=["cam", "t"], how="inner")
 
 
