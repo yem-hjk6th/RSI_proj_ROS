@@ -1,0 +1,18 @@
+{
+ "_comment": "CAGE2_OPT v1.4 rig for ELP-A, 11-02 (laptop CC): intrinsics = 10-14 (same lens; 11-02 free fit within 1 px), hand-eye = out_20261102_A2 (rms 2.35 px, tip pixel 1677.6/564.4), mask = v2 (calibration-view brightness spread, tape removed, +5 px; mask_cage2_v2_261102). Other keys copied from rig_cage1012.json.",
+ "intrinsics": "intrinsics.json",
+ "hand_eye": "hand_eye.json",
+ "paper_mm": 0.1,
+ "lat_s": 0.057,
+ "tool_abc": [
+  0,
+  90,
+  0
+ ],
+ "u_max": null,
+ "mask": "occlusion_mask_elpA_v2_261102.png",
+ "image_wh": [
+  1920,
+  1200
+ ]
+}

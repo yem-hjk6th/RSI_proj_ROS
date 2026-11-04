@@ -1,0 +1,18 @@
+{
+ "_comment": "CAGE2_OPT v1.4 rig for ELP-B, 11-02 (laptop CC, realtime_cl_cage2_261102): intrinsics = elp_intr_B_20261102_221640 (poly3), hand-eye = out_20261102_B (rms 2.73 px, tip pixel 1750.9/552.2), mask = mask_cage2_v2_261102 ELP-B (+5 px; the LED block covers part of the +n band at d 12-17.8, bins still pass). lat_s = the ELP-A value 0.057 (ELP-B latency NOT measured). Other keys copied from rig_cage2opt_elpA_261102_m2.json. Read by rt_readout.RtReadoutB (grid x = tip - d, +X lines).",
+ "intrinsics": "intrinsics.json",
+ "hand_eye": "hand_eye.json",
+ "paper_mm": 0.1,
+ "lat_s": 0.057,
+ "tool_abc": [
+  0,
+  90,
+  0
+ ],
+ "u_max": null,
+ "mask": "occlusion_mask_elpB_v2_261102.png",
+ "image_wh": [
+  1920,
+  1200
+ ]
+}
