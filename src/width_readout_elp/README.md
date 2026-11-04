@@ -26,18 +26,20 @@ where it is on layer 1 relative to the tool. `Width.leg` is that layer's leg. Wi
 ## Fan and semicircle patterns (T13)
 
 A pattern json with `"geometry"` `fan` (FAN1) or `semi` (ARC2) switches the node to `PathReadout` (ELP-A on the A legs),
-the port of the legacy `FanReadout` / `SemiReadout` (`legacy/realtime_cl_cage2_semi_261103/`); every other pattern runs
-`RtReadout` unchanged.
+the port of the legacy `FanReadout` / `SemiReadout` (`legacy/realtime_cl_cage2_semi_261103/`); a pattern without
+`"geometry"` runs `RtReadout` unchanged. Any other `"geometry"` value (e.g. `arc`) is refused.
 
 - Gate: `path_geometry.gates.elp_gate` at `t_frame - lat_s`: `stale`, `no_track`, `z_or_dir` (`|z - z_cmd| > 0.5`, or
   motion over 0.1 s along the local tangent below `dir_min_mm`), `leg_or_xwin` (no A line within `line_tol_mm`, or x
   outside `x_window`), `min_s_tip`. No angle cap. `Width.leg` is the line's leg, `s_tip_mm` the arc length along it.
 - Grid: rows at `s_tip - d` (d 12-25 mm) along the line or row (through the lobe joints of ARC2), columns along the local
   normal; the profile math of `rows_from_chroma` with the MDF band of the line's `mdf_side`; `s_dep = s_tip - d`.
-- Semi patterns with `gate_log_dir` set: one row per gated frame in `<gate_log_dir>/semi_gate_<camera>.csv` (the legacy
-  `semi_gate_<ses>.csv` columns, cam `elpA`, `s_obs` = `s_tip` as the legacy ELP rows).
-- `pattern_json` may be a file name in `path_geometry/patterns/` (`pattern_usr_ELP_FAN1_261103.json`,
-  `pattern_usr_ELP_ARC2_261103.json`). The cage-2 rigs are packaged since T15 (`config/rig/cage2opt_elpA|B/`).
+- Semi patterns: one row per gated frame in `semi_gate_<camera>.csv` (the legacy `semi_gate_<ses>.csv` columns, cam
+  `elpA`, `s_obs` = `s_tip` as the legacy ELP rows) in `gate_log_dir`, or, when that is empty, in the folder of
+  `session_meta` (next to the session logs, as width_readout_bore1; print_session sets it); no log without either. An
+  existing file is appended to: a node restarted into the same folder keeps the earlier rows.
+- `pattern_json` may be a bare file name in `path_geometry/patterns/` (`pattern_usr_ELP_FAN1_261103.json`,
+  `pattern_usr_ELP_ARC2_261103.json`); a value with a folder part must be an existing file (no fallback by name). The cage-2 rigs are packaged since T15 (`config/rig/cage2opt_elpA|B/`).
 - `PathReadout(kind="B")` is the ELP-B readout (`FanReadoutB` / `SemiReadoutB`); there is no ELP-B node yet.
 
 ```bash
@@ -60,8 +62,9 @@ ros2 run width_readout_elp width_readout_elp_offline \
 `camera` (also the `Width.source`, default `elp`), `image_topic` (`/elp/image_raw`), `state_topic` (`/krc/state`),
 `width_topic` (`/width/elp`), `rig_json`, `pattern_json`, `root` (empty = packaged files), `d_min` (12.0),
 `use_header_stamp` (true: frame time = image header stamp; false: receive time), `gate_log_dir` (semi patterns: the
-gate log folder; empty = no log). Example: `config/width_readout_elp.yaml`; `launch/width_readout_elp.launch.py`
-takes the string parameters as launch arguments.
+gate log folder; empty = the folder of `session_meta`), `session_meta` (the session's session_meta.json; only its folder
+is used). Example: `config/width_readout_elp.yaml`; `launch/width_readout_elp.launch.py` takes the string parameters as
+launch arguments; every argument defaults to empty and only the given ones override `params_file`.
 
 The frame time and the `KrcState.stamp` must be on the same clock (PC time). Supported encodings: bgr8, rgb8,
 bgra8, rgba8. `Width.leg` carries the pattern's leg number as in the legacy logs.
@@ -93,8 +96,10 @@ bgra8, rgba8. `Width.leg` carries the pattern's leg number as in the legacy logs
   default: the A leg printed 9 mm before the B line lies in the -n half; `both`, `neg`). Fan / semi patterns: the path
   readout of kind B.
 - Rigs are bound to the camera role, not to a USB instance id: `config/rig/cage2opt_elpA/` and `cage2opt_elpB/` are byte
-  copies of the legacy rigs. Kind B without `rig_json` uses the ELP-B rig; a rig whose file name carries the other role
-  is refused. The ELP-B rig's `lat_s` 0.057 s is the ELP-A value (the ELP-B latency was not measured).
+  copies of the legacy rigs. Kind B without `rig_json` uses the ELP-B rig. A rig's role comes from the rig, never from
+  its file name (`config.rig_role`): a `"role"` key (`elpA` | `elpB`) in the rig json, else the packaged role folder
+  that holds it, else the same content as a packaged rig (the E1 rig `rig_cage1012.json` is the ELP-A unit). A rig of
+  the other role, or one whose role cannot be determined, is refused: a recalibrated lab rig needs the `"role"` key. The ELP-B rig's `lat_s` 0.057 s is the ELP-A value (the ELP-B latency was not measured).
 - Refused: kind B on a pattern without B lines, kind B on `/width/elp` or kind A on `/width/elp_b`, an unknown kind or
   MDF side.
 - Tests (`test/test_elp_b.py`): every frame of the ELP-B log of session bduo_20261103_195120, port = legacy offline and

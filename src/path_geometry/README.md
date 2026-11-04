@@ -51,7 +51,10 @@ as legacy (module docstring):
 angle at `s_dep` is the start tangent's, since `delta_at` clamps `s`; 78 passed frames on ARC2-OL, the 78 bore rows
 with `s_dep < 0` of the failure map). `elp_grid(line, tip)`: rows at `s_tip - d` (d 12-25 mm, 0.1 mm) along the line
 (fan) or the row through the lobe joints (semi; before the leg start the start tangent extended), columns at `e_tip + n`
-along the local normal. `GateLog` / `gate_log_row`: the legacy `semi_gate_<ses>.csv` rows (semi patterns only).
+along the local normal. `GateLog` / `gate_log_row`: the legacy `semi_gate_<ses>.csv` rows (semi patterns only); an
+existing file with the same header is appended to, never truncated. `is_path_pattern` is True for `fan` / `semi`, False
+without `"geometry"`, and raises `ValueError` for any other value; `pattern_path` falls back to `patterns/` only for a
+bare file name.
 
 ## angle_failure_map
 
@@ -65,6 +68,9 @@ Options: `--pattern P` (a json path, or a file name in `patterns/`; default: `re
 `raw_video/session_meta.json`, by file name), `--out DIR` (default: the session's `roboter/`), `--bin 15` (deg; must
 divide 180), `--plots`, `--ses ID` (default: `session_ts` of the session meta). The session layout of `data/`
 (`raw_video/`, `roboter/`, `.csv.gz`) and the legacy layout (`raw_video/<ses>/`, `roboter/<ses>/`, `.csv`) are both read.
+The gate log cross-check reads the legacy `roboter/semi_gate_<ses>.csv`, else the per-camera files
+`semi_gate_<camera>.csv` of the ROS readout nodes (`bore1`, `bore2`, `elp`, `elp_b`; in the session folder, next to
+session_meta.json, or in `roboter/` / `raw_video/`).
 
 | Output | Rows |
 |---|---|
@@ -104,6 +110,7 @@ take everything beyond ±90.
 | `test_gates_sessions.py` | T13 acceptance 2-4 on both sessions, every logged frame of bore1, bore2, ELP-A, ELP-B: port = legacy offline on the same ring (reason, leg exactly; `s_tip`, `s_dep`, `e` within 1e-9 mm); legacy offline = live (ELP: decision and leg, `s_tip` within 0.001 mm, cuts `t_frame` and `t_done`; bores at the `t_done` cut: reason and leg, `s_tip` within 0.1 mm, every larger difference reproduced by an earlier cut); the gate log = `semi_gate_20261103_235936.csv`; the angle cap for 0-90 deg = legacy with the task file's `angle` counts; `angle_at="obs"`; the 78 frames with `s_dep < 0`. |
 | `test_gates_grid.py` | T13 acceptance 5: the grid of 1000 gated tips per pattern = the legacy grid within 1e-9 mm; MDF bands. |
 | `test_gates_synthetic.py` | Every reason of both kinds and geometries on synthetic tracks, port = legacy; argument checks; the gate log file. |
+| `test_pattern_and_gate_log.py` | T13 review: an unknown `geometry` is refused; a pattern path with a folder part does not fall back by name; `GateLog` appends on restart; `gate_log_check` finds the per-camera files. |
 | `test_no_ros.py` | No ROS imports; `geometry.py` and `gates.py` need numpy only. |
 
 Fixtures (`test/fixtures/golden_legacy_arc2ol_failuremap_*.csv.gz`, 1.5 MB together) are the legacy tool's four

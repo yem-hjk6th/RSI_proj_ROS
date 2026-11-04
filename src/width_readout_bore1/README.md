@@ -81,7 +81,8 @@ Parameters (defaults in `params.py`, example `config/width_readout_bore1.yaml`):
 
 A pattern json with `"geometry"` `fan` (FAN1) or `semi` (ARC2) switches the gate to `path_geometry.gates.bore_gate`
 (kind A), the legacy `make_fan_bore_gate("A", max_deg)` / `make_semi_bore_gate("A", max_deg)` that `run_cl.py`
-installs (`legacy/realtime_cl_cage2_semi_261103/`). Every other pattern runs `bore1_gate` unchanged.
+installs (`legacy/realtime_cl_cage2_semi_261103/`). A pattern without `"geometry"` runs `bore1_gate` unchanged; any
+other `"geometry"` value (e.g. `arc`) is refused.
 
 - Tip at the frame time (no latency): `stale`, `no_track`, `z_or_dir` (`|z - z_cmd| >= 0.5`, or motion over 0.1 s along
   the local tangent `<= 0.3` mm), `leg_or_x` (no A line, `|e| >= 0.5`, or x outside `770 < x < 945`), `angle`
@@ -92,8 +93,10 @@ installs (`legacy/realtime_cl_cage2_semi_261103/`). Every other pattern runs `bo
   legacy README known issue 2). In the first 5 mm of a leg `s_tip - 5 < 0` and the angle there is the start tangent's
   (`BoreGate.obs_before_start`; 78 passed frames on ARC2-OL).
 - Semi patterns: the gate log `semi_gate_<camera>.csv` (legacy columns, cam `bore1`, `s_obs = s_tip - 5`) goes to
-  `gate_log_dir`, or to the folder of `session_meta` when that is empty; no log without either.
-- `pattern_json` may be a file name in `path_geometry/patterns/`.
+  `gate_log_dir`, or to the folder of `session_meta` when that is empty; no log without either. An existing file is
+  appended to (a restarted node keeps the earlier rows).
+- `pattern_json` may be a bare file name in `path_geometry/patterns/`; a value with a folder part must be an existing
+  file.
 
 ```bash
 ros2 launch width_readout_bore1 width_readout_bore1.launch.py pattern_json:=pattern_usr_ELP_FAN1_261103.json \

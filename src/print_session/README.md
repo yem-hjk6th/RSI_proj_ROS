@@ -200,7 +200,9 @@ react to.
   `fallback` / `primary` the session ends if that node ends (as for bore1 with plan A_b1).
 
 Rigs are bound to the role: ELP-A uses the section's `rig_json` or the packaged cage-2 ELP-A rig, ELP-B the packaged
-ELP-B rig; a rig named for the other role, or the same file for both, is refused. `cl_controller.bore_sd_max` and
+ELP-B rig; a rig of the other role, a rig whose role cannot be determined (`width_readout_elp.config.rig_role`: a
+`"role"` key, the packaged role folder or a copy of a packaged rig; never the file name), or the same file for both, is
+refused. `cl_controller.bore_sd_max` and
 `bore1_offset_mm` / `bore2_offset_mm` are handed to the bore nodes (`sd_max`, `w_offset`); a bore section that sets
 another value is refused. The cage-2 refusals of run_cl.py are listed in `print_session/startup.py`. The camera file must
 publish the images the readouts read: `camera_capture/config/cameras_cage.yaml` keeps `publish_raw: false` for elp_b

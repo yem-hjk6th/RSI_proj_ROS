@@ -11,6 +11,7 @@ width_readout_elp:
     root: ""
     d_min: 12.0
     use_header_stamp: true
-    gate_log_dir: ""          # fan / semi patterns: semi gate log folder (semi only; empty = no log)
+    gate_log_dir: ""          # semi patterns: gate log folder; empty = the folder of session_meta (no log without it)
+    session_meta: ""          # the session's session_meta.json (print_session sets it); its folder holds the gate log
     kind: A                   # A = ELP-A on the -X legs; B = ELP-B on the +X lines (cage 2, see width_readout_elp_b.yaml)
     b_mdf_side: pos           # kind B: MDF reference half (pos | both | neg)

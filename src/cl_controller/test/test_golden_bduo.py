@@ -12,12 +12,23 @@ port (cl_controller with the session's flags, bduo_data.PARAMS). Inputs and sche
       later. On 21 updates a bore push logged 0.3-2.5 ms after the stamp was already in the store; with that one push
       applied before the update the legacy replay reproduces the live OvCmd, n_bins and u (`ADVANCED`). With them,
       OvCmd, source, state, law, kind, src_active, leg and window equal the live log at all 1146 updates;
+    - the same race at 13 more updates (`PROBED`), where it changes only floats: w_est (up to 0.022 mm, update 986:
+      live 5.3467, replay 5.3685), rhat (up to 0.0092) and the window v_eff (up to 0.061 mm/s). Each is reproduced at
+      the printed precision (u within 1.6e-5, as below) by the update rerun with the next bore push (0.6-2.3 ms after
+      the stamp) applied before it (`cage2_replay.explain_live` probes; the replay itself continues unprobed). w_est
+      does not depend on the RSI ring when n_bins is equal, so the drain lag does not explain these; the store content
+      does;
     - updates 473-476: OvCmd, bins and rows equal; u is 1.6e-4 lower in the replay. The bore1 window's v_eff is
       18.4296 mm/s in the replay and 18.433 live. Leaving one packet (112 packets before the update) out of the ring
-      reproduces the live value, but rsi_data does not log what the live ring held. u re-syncs at update 477;
-    - the other float columns are bounded below. Window v_eff: up to 0.061 mm/s at 14 updates, same cause, OvCmd
-      unchanged. s_tip, v_tip and vx: the live ring's drain lag, as on E1. It was 1-4 packets at five updates and
-      about 27 packets (0.11 s, s_tip 1.3 mm) at update 100, a hold;
+      reproduces the live value, but rsi_data does not log what the live ring held. u re-syncs at update 477. These
+      are the only updates whose OvCmd, n_bins or u (within 6e-5) the schedule does not reproduce (`U_ONLY`);
+    - not explained individually (the test lists them): w_est differs by more than its print precision (5e-5) at 88
+      more updates and rhat (5e-6) at 270 more, all within the bound that the 4-decimal rounding of the logged input
+      widths allows (`cage2_replay.w_est_bound`, `rhat_bound`; max 8.9e-5 and 1.6e-5). u differs by more than 5e-6 at
+      401 updates outside U_ONLY (405 with them), by less than 1.6e-5 (u integrates rhat). These are consistent with
+      the rounding, but the unrounded inputs are not logged, so the test does not show it;
+    - s_tip, v_tip and vx: the live ring's drain lag, as on E1. It was 1-4 packets at five updates and about 27
+      packets (0.11 s, s_tip 1.3 mm) at update 100, a hold;
     - switch records: the same 62 changes, at the same update times, with the same labels, lines and directions;
     - per packet: the source of every reply equals ov_cmd; OvCmd differs only on packets less than 9 ms after an
       update that changed it (the publish instant inside the step is not logged).
@@ -44,6 +55,9 @@ SWITCH_FLOAT = ["t", "x", "y", "z", "s", "vx", "u"]
 N_UPDATES, N_SWITCHES = 1146, 62
 N_ADVANCED = 21
 U_ONLY = [473, 474, 475, 476]
+# w_est / rhat / v_eff beyond the input-rounding bound, reproduced by the next bore push (module docstring (b))
+PROBED = [361, 383, 407, 427, 570, 583, 674, 711, 753, 831, 844, 963, 986]
+N_W_ROUND, N_RHAT_ROUND, N_U_ROUND = 88, 270, 401      # within the rounding bound, not explained individually
 # effective sources of the session: bore1 and bore2 steered every controlled line (each after the model at its start)
 SRC_SEEN = {"outside", "hold", "model_A", "bore1", "model_B", "bore2"}
 PUBLISH_WINDOW_S = 0.009
@@ -152,8 +166,9 @@ def test_port_equals_legacy_switches(runs):
 def live():
     import cage2_replay as R
     d = B.load()
-    rows, advanced, unexplained, L = R.explain_live(d["ctrl"], B.packets(d), B.readouts())
-    return dict(d=d, rows=rows, advanced=advanced, unexplained=unexplained, L=L)
+    probes = {}
+    rows, advanced, unexplained, L = R.explain_live(d["ctrl"], B.packets(d), B.readouts(), probes=probes)
+    return dict(d=d, rows=rows, advanced=advanced, unexplained=unexplained, L=L, probes=probes)
 
 
 def test_legacy_replay_vs_live_ctrl(live, capsys):
@@ -169,7 +184,7 @@ def test_legacy_replay_vs_live_ctrl(live, capsys):
     for c in ("win", "src", "state", "reason", "law", "kind", "src_active", "plan"):
         assert [str(r[c]) for r in rows] == C[c].fillna("").astype(str).tolist(), c
     assert [str(r["dir"]) for r in rows] == C["dir"].fillna("").astype(str).tolist()
-    # u: equal at the printed precision except U_ONLY (module docstring)
+    # u: within 6e-5 except U_ONLY; outside U_ONLY not at the printed precision everywhere (module docstring (b))
     du = np.abs(np.array([r["u"] for r in rows]) - C["u"].to_numpy(float))
     assert (np.flatnonzero(du > 6e-5) == U_ONLY).all() and du.max() <= 2e-4
     out = []
@@ -189,6 +204,56 @@ def test_legacy_replay_vs_live_ctrl(live, capsys):
               f"(max {du.max():.1e}); float p99/max: " + ", ".join(out))
 
 
+def _ranges(ks):
+    out, ks = [], sorted(ks)
+    for k in ks:
+        if out and k == out[-1][1] + 1:
+            out[-1][1] = k
+        else:
+            out.append([k, k])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in out)
+
+
+def test_legacy_replay_vs_live_w_est_rhat(live, capsys):
+    """Module docstring (b): every w_est / rhat difference beyond the rounding of the logged inputs is the store race
+    (PROBED, shown by the probe); the ones within that bound are listed as not explained individually."""
+    import cage2_replay as R
+    C, rows, probes = live["d"]["ctrl"], live["rows"], live["probes"]
+    alpha = live["L"].cfg.alpha_m
+    assert min(float(r.w.min()) for r in B.readouts() if len(r.w)) > R.W_MIN_LOGGED      # the bound's premise
+    off = [k for k in range(len(rows)) if R.float_off(rows[k], C, k, alpha)]
+    assert off == sorted(PROBED + U_ONLY[:1]) and sorted(probes) == off
+    assert probes[U_ONLY[0]] is None                    # 473: no bore push near; the ring (module docstring)
+    dts = []
+    for k in PROBED:
+        row, src, dt = probes[k]
+        assert src in ("bore1", "bore2") and 0 < dt <= R.ADVANCE_MAX_S, k
+        assert not R.float_off(row, C, k, alpha), k
+        assert row["ov_pub"] == int(C["ov_pub"][k]) and row["n_bins"] == int(C["n_bins"][k]), k
+        assert abs(row["veff"] - float(C["veff"][k])) <= 5e-4 + 1e-9, k        # printed with 3 decimals
+        assert abs(row["u"] - float(C["u"][k])) < 1.6e-5, k                    # as at every update outside U_ONLY
+        dts.append(dt)
+    w, lw = np.array([_f(r["w_est"]) for r in rows]), C["w_est"].to_numpy(float)
+    dw = np.nan_to_num(np.abs(w - lw))
+    assert (np.isnan(w) == np.isnan(lw)).all()
+    assert np.flatnonzero(dw > 0.0005).tolist() == PROBED and abs(w[986] - 5.3685) < 5e-5 and lw[986] == 5.3467
+    rh = np.nan_to_num(np.abs(np.array([_f(r["rhat"]) for r in rows]) - C["rhat"].to_numpy(float)))
+    du = np.abs(np.array([r["u"] for r in rows]) - C["u"].to_numpy(float))
+    du[U_ONLY] = 0.0
+    w_round = sorted(set(np.flatnonzero(dw > 0.5e-4 + 1e-9).tolist()) - set(PROBED))
+    r_round = sorted(set(np.flatnonzero(rh > 0.5e-5 + 1e-9).tolist()) - set(PROBED) - set(U_ONLY))
+    u_round = np.flatnonzero(du > 0.5e-5 + 1e-9).tolist()
+    assert (len(w_round), len(r_round), len(u_round)) == (N_W_ROUND, N_RHAT_ROUND, N_U_ROUND)
+    assert du.max() < 1.6e-5
+    with capsys.disabled():
+        print(f"\n[bduo legacy replay vs live w_est / rhat] beyond the input-rounding bound: updates {PROBED}, each "
+              f"reproduced by the next bore push ({1e3 * min(dts):.1f}-{1e3 * max(dts):.1f} ms after the stamp), and "
+              f"{U_ONLY[0]} (ring). Not explained individually (within the rounding bound): w_est at {len(w_round)} "
+              f"updates (max {max(dw[k] for k in w_round):.1e}): {_ranges(w_round)}; rhat at {len(r_round)} "
+              f"(max {max(rh[k] for k in r_round):.1e}): {_ranges(r_round)}; u at {len(u_round)} (max "
+              f"{du.max():.1e}): {_ranges(u_round)}")
+
+
 def test_legacy_replay_vs_live_switches(live, capsys):
     S = live["d"]["switch"]
     sw = live["L"].switches
@@ -203,7 +268,8 @@ def test_legacy_replay_vs_live_switches(live, capsys):
     assert [int(e["ov"]) for e in sw] == S["ov_cmd"].astype(int).tolist()
     assert np.abs(np.array([e["t"] for e in sw]) - S["t_perf"].to_numpy(float)).max() <= 1e-6
     worst = {}
-    # x, y, z, s, vx: the live ring's drain lag (1-2 packets) at the update; u: updates 473-476 (U_ONLY)
+    # x, y, z, s, vx: the live ring's drain lag (1-2 packets) at the update; u: up to 1.1e-5,
+    # not explained individually (as u in the ctrl log, module docstring (b))
     for c, tol in (("x", 0.25), ("y", 0.25), ("z", 0.15), ("s", 0.25), ("vx", 1.5), ("u", 2e-4)):
         a, b = np.array([_f(e[c]) for e in sw]), S[c].to_numpy(float)
         assert (np.isnan(a) == np.isnan(b)).all(), c
