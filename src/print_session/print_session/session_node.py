@@ -21,9 +21,9 @@ from camera_capture.session_meta import merge_meta, update_meta
 from krc_interfaces.msg import CtrlRecord, KrcState
 
 from . import topics as T
-from .startup import SESSION_PARAMS, load_params, plan
+from .startup import SESSION_META, SESSION_PARAMS, load_params, plan
 
-META = "session_meta.json"
+META = SESSION_META
 
 
 class SessionNode(Node):

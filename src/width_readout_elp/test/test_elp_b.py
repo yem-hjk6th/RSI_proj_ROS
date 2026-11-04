@@ -197,11 +197,18 @@ def test_refused_parameters():
 
 
 def test_rig_role_check():
+    """The role mismatch: rig files that exist and are bound to the other role (PR #44 review, follow-up 4; the bare
+    file names used before did not exist and hit "cannot be determined")."""
+    from width_readout_elp.config import role_rig_json
     check_rig_role("A", default_rig_json())             # the E1 rig carries no role in its name
-    with pytest.raises(ValueError):
-        check_rig_role("A", "rig_cage2opt_elpB_261102.json")
-    with pytest.raises(ValueError):
-        check_rig_role("B", "rig_cage2opt_elpA_261102_m2.json")
+    rig_b, rig_a = role_rig_json("elpB"), role_rig_json("elpA")
+    assert rig_b.is_file() and rig_a.is_file()
+    check_rig_role("A", rig_a)
+    check_rig_role("B", rig_b)
+    with pytest.raises(ValueError, match=r"is the elpB rig, but this readout is kind A"):
+        check_rig_role("A", rig_b)
+    with pytest.raises(ValueError, match=r"is the elpA rig, but this readout is kind B"):
+        check_rig_role("B", rig_a)
 
 
 def test_rig_role_by_content_or_folder_not_by_name(tmp_path):

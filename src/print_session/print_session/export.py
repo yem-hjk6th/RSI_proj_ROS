@@ -5,12 +5,15 @@ Output layout (what legacy eval_v3_print.py --data <out> --session <ses> reads):
     readout_rows_<ses>.csv
     <out>/raw_video/<ses>/session_meta.json   (copied, when given)
     <out>/raw_video/<ses>/bore1_rt_<ses>.csv  (when the bag has Bore1Record messages)
+    <out>/raw_video/<ses>/semi_gate_<camera>.csv  (the readouts' gate logs of a semi pattern, copied from the folder of
+        session_meta.json or from `gate_log_dir`; ``t`` converted to the exported clock, see gate_log_rows)
   cage 2 (T15), when the bag has them:
     <out>/roboter/<ses>/switch_<ses>.csv (SwitchRecord), readoutB_<ses>.csv / readoutB_rows_<ses>.csv (/width/elp_b)
     <out>/raw_video/<ses>/bore2_rt_<ses>.csv  (Bore1Record on /width/bore2/record)
 Columns, order and number formats follow legacy_cols. Columns no topic carries are filled as legacy_cols.NOT_CARRIED
 says.
 """
+import bisect
 import csv
 import math
 import shutil
@@ -126,6 +129,46 @@ def bore1_rows(records: Iterable, offset: Optional[float]) -> List[list]:
     return out
 
 
+GATE_LOG_GLOB = "semi_gate_*.csv"       # the readout nodes' per-camera gate logs (path_geometry.gates.GateLog)
+
+
+def gate_log_rows(path, records: Dict[str, list], offset: Optional[float]):
+    """(header, rows) of a readout node's gate log ``semi_gate_<camera>.csv`` with ``t`` on the clock of the exported
+    logs. The nodes log ``t`` as the frame stamp (the clock of ``KrcState.stamp``); the export writes bore_rt
+    ``t_frame`` = stamp - offset (``wall_minus_perf``), as the legacy logs did, so the failure map can join the bore
+    rows with the gate log on (cam, t). A row of a bore camera takes the exact ``t_frame`` text of the Bore1Record
+    with the same stamp (the gate log rounds t to 1 us, the stamp to 1 ns); any other row gets t - offset. Without
+    an offset (no RSI packets in the bag) the rows are copied unchanged. ``records``: camera -> Bore1Record list."""
+    with open(path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    if not rows:
+        return [], []
+    head, body = rows[0], rows[1:]
+    if offset is None or "t" not in head or "cam" not in head:
+        return head, body
+    ic, it = head.index("cam"), head.index("t")
+    keys = {}
+    for cam, recs in records.items():
+        ts = sorted(stamp_s(m.stamp) for m in recs)
+        keys[cam] = (ts, [f"{t - offset:.6f}" for t in ts])    # = bore1_rows' t_frame (legacy_csv_row format)
+    out = []
+    for r in body:
+        if len(r) <= max(ic, it):
+            continue                                            # a row cut off at the end of a run
+        try:
+            t = float(r[it])
+        except ValueError:
+            continue
+        txt = f"{t - offset:.6f}"
+        ts, tx = keys.get(r[ic], ((), ()))
+        i = bisect.bisect_left(ts, t)
+        near = [j for j in (i - 1, i) if 0 <= j < len(ts) and abs(ts[j] - t) <= 1e-6]
+        if near:
+            txt = tx[min(near, key=lambda j: abs(ts[j] - t))]
+        out.append(r[:it] + [txt] + r[it + 1:])
+    return head, out
+
+
 def _write(path: Path, cols, rows) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -135,9 +178,10 @@ def _write(path: Path, cols, rows) -> None:
 
 def export(msgs: Dict[str, list], out_dir, session: str, meta_path=None, elp_topic: str = T.WIDTH_ELP,
            bore1_topic: str = T.BORE1_RECORD, elp_b_topic: str = T.WIDTH_ELP_B,
-           bore2_topic: str = T.BORE2_RECORD) -> dict:
-    """Write the five legacy CSVs, bore1_rt when the bag has bore1 records (and copy session_meta.json). `msgs` maps
-    topic -> messages in bag order. Returns {file name: number of data rows}."""
+           bore2_topic: str = T.BORE2_RECORD, gate_log_dir=None) -> dict:
+    """Write the five legacy CSVs, bore1_rt when the bag has bore1 records (and copy session_meta.json and the gate
+    logs ``semi_gate_<camera>.csv`` of `gate_log_dir`, default: the folder of `meta_path`, where the bringup's
+    readouts write them). `msgs` maps topic -> messages in bag order. Returns {file name: number of data rows}."""
     rd = Path(out_dir) / "roboter" / session
     rd.mkdir(parents=True, exist_ok=True)
     st, rp = msgs.get(T.STATE, []), msgs.get(T.REPLY, [])
@@ -170,4 +214,15 @@ def export(msgs: Dict[str, list], out_dir, session: str, meta_path=None, elp_top
     if meta_path is not None and Path(meta_path).exists():
         vd.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(meta_path, vd / "session_meta.json")
+    if gate_log_dir is None and meta_path is not None:
+        gate_log_dir = Path(meta_path).parent
+    if gate_log_dir is not None and Path(gate_log_dir).is_dir():
+        recs = {cam: msgs.get(topic, []) for cam, topic in (("bore1", bore1_topic), ("bore2", bore2_topic))}
+        for src in sorted(Path(gate_log_dir).glob(GATE_LOG_GLOB)):
+            head, rows = gate_log_rows(src, recs, off)
+            if not head:
+                continue
+            vd.mkdir(parents=True, exist_ok=True)
+            _write(vd / src.name, head, rows)
+            counts[src.name] = len(rows)
     return counts

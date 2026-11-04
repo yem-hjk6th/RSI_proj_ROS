@@ -113,6 +113,25 @@ def pattern_dirs() -> List[Path]:
     return out
 
 
+SESSION_META = "session_meta.json"
+
+
+@dataclass(frozen=True)
+class SessionPaths:
+    """The bringup's session folder ``<out_dir>/<session>/``: ``session_meta.json`` (written by the session node; the
+    readouts get its path as ``session_meta`` and write their gate logs ``semi_gate_<camera>.csv`` next to it), the
+    bag and the cameras' ``raw_video/``."""
+    dir: Path
+    meta: Path
+    bag: Path
+    raw_video: Path
+
+
+def session_paths(out_dir, session: str) -> SessionPaths:
+    d = (Path(out_dir) / session).resolve()
+    return SessionPaths(d, d / SESSION_META, d / "bag", d / "raw_video")
+
+
 def default_rig() -> Path:
     from width_readout_elp.config import default_rig_json
     return Path(default_rig_json())

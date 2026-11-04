@@ -64,9 +64,10 @@ ros2 run path_geometry angle_failure_map --session data/arc2ol_20261103_235936 -
 PYTHONPATH=src/path_geometry python3 -m path_geometry --session data/arc2ol_20261103_235936 --out fm_out
 ```
 
-Options: `--pattern P` (a json path, or a file name in `patterns/`; default: `realtime.pattern` of
-`raw_video/session_meta.json`, by file name), `--out DIR` (default: the session's `roboter/`), `--bin 15` (deg; must
-divide 180), `--plots`, `--ses ID` (default: `session_ts` of the session meta). The session layout of `data/`
+Options: `--pattern P` (a json path, or a bare file name in `patterns/`; a path with a folder part that does not exist
+fails, it never falls back to the packaged pattern; default: `realtime.pattern` of `raw_video/session_meta.json` or of
+the print_session folder's `session_meta.json`, by file name), `--out DIR` (default: the session's `roboter/`), `--bin 15` (deg; must
+divide 180), `--plots`, `--ses ID` (default: `session_ts` of the session meta, else its `print_session.session`). The session layout of `data/`
 (`raw_video/`, `roboter/`, `.csv.gz`) and the legacy layout (`raw_video/<ses>/`, `roboter/<ses>/`, `.csv`) are both read.
 The gate log cross-check reads the legacy `roboter/semi_gate_<ses>.csv`, else the per-camera files
 `semi_gate_<camera>.csv` of the ROS readout nodes (`bore1`, `bore2`, `elp`, `elp_b`; in the session folder, next to

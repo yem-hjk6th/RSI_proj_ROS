@@ -37,14 +37,15 @@ from launch_ros.actions import Node
 from print_session import topics as T
 from print_session.cameras import plan_cameras, switch
 from print_session.startup import (BORE1, BORE2, BRIDGE, CONTROLLER, READOUT, READOUT_B, SESSION, Refused,
-                                   load_params, plan)
+                                   load_params, plan, session_paths)
 
 
 def _setup(context):
     arg = lambda k: LaunchConfiguration(k).perform(context)  # noqa: E731
     mode, params_file = arg("mode"), arg("params_file")
     ses = arg("session") or time.strftime("%Y%m%d_%H%M%S")
-    sdir = (Path(arg("out_dir")) / ses).resolve()
+    paths = session_paths(arg("out_dir"), ses)
+    sdir = paths.dir
     cameras_file = arg("cameras")
     try:
         readout = switch("readout", arg("readout"))
@@ -62,7 +63,7 @@ def _setup(context):
     except Refused as e:
         raise RuntimeError(f"print_session refused to start: {e}") from None
     sdir.mkdir(parents=True, exist_ok=True)
-    bag = sdir / "bag"
+    bag = paths.bag
     params_file = str(Path(params_file).resolve())
     acts = [LogInfo(msg=f"[print_session] {line}") for line in p.log]
     acts.append(LogInfo(msg=f"[print_session] session {ses} mode={mode} -> {sdir}"))
@@ -75,7 +76,7 @@ def _setup(context):
     acts.append(Node(package="cl_controller", executable="controller_node", name=CONTROLLER, output="screen",
                      parameters=[params_file, p.controller]))
     camera = ""
-    meta = str(sdir / "session_meta.json")     # the readouts write their gate logs next to it (semi patterns)
+    meta = str(paths.meta)                     # the readouts write their gate logs next to it (semi patterns)
     if p.readout is not None:
         acts.append(Node(package="width_readout_elp", executable="width_readout_elp_node", name=READOUT,
                          output="screen", parameters=[params_file, dict(p.readout, session_meta=meta)]))
@@ -98,7 +99,7 @@ def _setup(context):
     if cams:
         camera = "camera_capture"
         cameras_file = str(Path(cameras_file).resolve())
-        (sdir / "raw_video").mkdir(exist_ok=True)
+        paths.raw_video.mkdir(exist_ok=True)
         for c in cams:
             acts.append(LogInfo(msg=f"[print_session] camera {c.name}: {c.image_topic}, {c.preview_topic} -> "
                                     f"{c.overrides['video_dir']}"))

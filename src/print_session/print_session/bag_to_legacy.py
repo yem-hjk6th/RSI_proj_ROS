@@ -5,7 +5,8 @@
 
 Writes <out>/roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv, <out>/raw_video/<ses>/bore1_rt_<ses>.csv
 when the bag has bore1 records, and the cage-2 logs (switch_, readoutB_, readoutB_rows_, raw_video bore2_rt_) when
-the bag has their topics, and copies session_meta.json to <out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
+the bag has their topics, and copies session_meta.json and the readouts' gate logs semi_gate_<camera>.csv (semi
+patterns; t on the exported clock) to <out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
 """
 import argparse
 import json
@@ -23,6 +24,8 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True, help="output root (gets roboter/<ses>/ and raw_video/<ses>/)")
     ap.add_argument("--session", default=None, help="session name used in the file names")
     ap.add_argument("--meta", default=None, help="session_meta.json (default: next to the bag folder)")
+    ap.add_argument("--gate-log-dir", default=None,
+                    help="folder of the readouts' semi_gate_<camera>.csv (default: the folder of session_meta.json)")
     ap.add_argument("--elp-topic", default=T.WIDTH_ELP, help="Width topic of the ELP readout")
     ap.add_argument("--bore1-topic", default=T.BORE1_RECORD, help="Bore1Record topic of the bore1 readout")
     ap.add_argument("--elp-b-topic", default=T.WIDTH_ELP_B, help="Width topic of the ELP-B readout (cage 2)")
@@ -37,10 +40,11 @@ def main(argv=None) -> int:
     from .bag_io import read_bag
     msgs = read_bag(bag, [T.STATE, T.REPLY, T.CTRL, T.SWITCH, a.elp_topic, a.bore1_topic, a.elp_b_topic,
                           a.bore2_topic])
+    gate_dir = Path(a.gate_log_dir) if a.gate_log_dir else meta.parent
     counts = export(msgs, a.out, ses, meta if meta.exists() else None, a.elp_topic, a.bore1_topic, a.elp_b_topic,
-                    a.bore2_topic)
+                    a.bore2_topic, gate_log_dir=gate_dir)
     for name, n in counts.items():
-        sub = "raw_video" if name.startswith(("bore1_rt_", "bore2_rt_")) else "roboter"
+        sub = "raw_video" if name.startswith(("bore1_rt_", "bore2_rt_", "semi_gate_")) else "roboter"
         print(f"{n:8d} rows  {Path(a.out) / sub / ses / name}")
     for f, cols in NOT_CARRIED.items():
         print(f"not carried by the topics ({f}): " + ", ".join(k for k in cols if not k.startswith("_")))
