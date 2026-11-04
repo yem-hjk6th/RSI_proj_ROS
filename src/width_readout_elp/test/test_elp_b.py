@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from legacy_paths import BDUO, BDUO_SES, CAGE2_DIR, CAGE2_RIGS, import_legacy_cage2
+from legacy_paths import BDUO, BDUO_SES, CAGE2_RIGS, import_legacy_cage2
 from width_readout_elp import readout as port
 from width_readout_elp.config import (ROLE_RIGS, check_rig_role, config_dir, default_pattern_json, default_rig_json,
                                       make_readout, rig_for, role_rig_json)

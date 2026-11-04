@@ -128,3 +128,24 @@ The `print_session` exporter test (acceptance 4) is in `print_session/test/test_
 python3 -m pytest src/width_readout_bore1/test                   # with a sourced workspace for the ROS tests
 BORE1_WEIGHTS=<weight dir> BORE1_VIDEO=<bore_*.mp4> python3 -m pytest src/width_readout_bore1/test/laptop_golden_bore1.py
 ```
+
+## bore2 (cage 2, T15)
+
+`camera: bore2` runs the bore2 readout (port of `legacy/realtime_cl_cage2_semi_261103/bore1/bore2_rt.py`) as a second
+node of this package (`width_readout_bore2`, example `config/width_readout_bore2.yaml`: `/bore2/image_raw` ->
+`/width/bore2`, `/width/bore2/record`; the record has the bore1_rt columns, `leg` = the B line).
+
+- Gate (`gate.bore2_gate`): frame time, no latency; `z_or_dir` (|z - z_cmd| >= 0.5, or not moving +X: x(t) - x(t - 0.1)
+  <= 0.3); `line_or_x` (no B line, |y - line y| >= 0.5, or x outside the pattern's `x_window`, inclusive);
+  `s_tip = x - b_x0[leg]`, `s_dep = s_tip - 5`. Fan / semi patterns: the path gate of kind B.
+- Head: the bore1 head with the bore2 crop (x 544-1120, y 0-576, then a horizontal flip). `weights` selects the sha256
+  list: `e1` (the frozen bore1 head; bore1 default) or `cage2` (the cage-2 fine-tuned heads; bore2 default).
+  `config/bore_weights/` is a byte copy of the legacy `bore_weights/` (sha256 lists, quality limits, bore2 crop; no `.pt`).
+- `w_offset` (run_cl `--bore1-offset-mm` / `--bore2-offset-mm`) is added to the published width, not to the record.
+- Refused (`params.check`): bore2 without `quality_json` (run_cl.py 1125), bore1 with the cage-2 weights and no
+  `quality_json` (1120), a missing quality file, |w_offset| > 0.30 mm (1127), an unknown camera or weight set, a camera
+  publishing on the other borescope's topics, bore2 on a pattern without B lines.
+- Tests (`test/test_bore2.py`): every frame of the bore2 log of session bduo_20261103_195120: port = legacy offline at
+  the t_done cut; legacy = live (reason and leg on all but one frame, s_tip within 0.1 mm; the rest reproduced by an
+  earlier cut); the replay head reproduces the logged head columns and counts. `test/laptop_golden_bore2.py` compares
+  the torch head with the legacy `Bore2Head` on the lab laptop (skips without weights or CUDA).
