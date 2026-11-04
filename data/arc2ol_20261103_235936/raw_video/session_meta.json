@@ -1,0 +1,1163 @@
+{
+  "session_ts": "20261103_235936",
+  "start_epoch": 1793768378.9073753,
+  "wait_for_rsi": true,
+  "src_name": "usr_ELP_ARC2_OL_261103.src",
+  "ceiling_light": "off",
+  "borescope": {
+    "camera_indices": [
+      3,
+      2
+    ],
+    "cameras": [
+      {
+        "role": "bore1",
+        "camera_index": 3,
+        "tag": "",
+        "frames_csv": "borescope_frames_20261103_235936.csv",
+        "name": "Teslong Camera",
+        "instance_match": "8&21d1e258",
+        "usb_instance": "8&21d1e258&0&0000",
+        "rig": {
+          "ts": "20261102_210000",
+          "dev_deg": null,
+          "target_deg": null,
+          "centreline_mm": 14.97,
+          "roll_mark": "tape bands + pen marks on both bores, applied by the user 11-02 before the cold prep (no photo logged)",
+          "note": "CAGE2_OPT v1.4 white PETG, bore1 = A side (pair 1, cage position 1), usb 8&21d1e258, DSHOW 3 on 11-02 (ids follow the port). Centreline 14.97 by caliper 11-02 (user; 10-27 15.21). Hand entry by laptop CC; drift ref ref_20261102_204001_cage2opt_taped.",
+          "snapshot": null
+        }
+      },
+      {
+        "role": "bore2",
+        "camera_index": 2,
+        "tag": "_bore2",
+        "frames_csv": "borescope_frames_20261103_235936_bore2.csv",
+        "name": "Teslong Camera",
+        "instance_match": "8&2e083781",
+        "usb_instance": "8&2e083781&0&0000",
+        "rig": {
+          "ts": "20261102_210000",
+          "dev_deg": null,
+          "target_deg": null,
+          "centreline_mm": 14.97,
+          "roll_mark": "tape bands + pen marks on both bores, applied by the user 11-02 before the cold prep (no photo logged)",
+          "note": "CAGE2_OPT v1.4 white PETG, bore2 = B side (pair 2), usb 8&2e083781, DSHOW 2 on 11-02, recorded by rec5s (pair-2 recorder). Centreline 14.97 by caliper 11-02 (user; 10-27 15.21). Hand entry by laptop CC.",
+          "snapshot": null
+        }
+      }
+    ],
+    "backend": "CAP_DSHOW",
+    "resolution": [
+      1280,
+      720
+    ],
+    "fps_nominal": 30.0,
+    "fourcc": "mp4v",
+    "segment_minutes": 15,
+    "camera_index": 3
+  },
+  "rsi": {
+    "host": "0.0.0.0",
+    "port": 59152,
+    "disconnect_timeout_s": 2.0
+  },
+  "elp": {
+    "role": "elpA",
+    "name": "Global Shutter Camera",
+    "instance_match": "7&325db0ba",
+    "usb_instance": "7&325db0ba&0&0000",
+    "camera_index": 1,
+    "backend": "CAP_DSHOW",
+    "fourcc_in": "MJPG",
+    "resolution": [
+      1920,
+      1200
+    ],
+    "fps_requested": 60,
+    "fourcc": "hevc_nvenc",
+    "jpeg_quality": null,
+    "segment_minutes": 1.0,
+    "controls": {
+      "CAP_PROP_AUTO_EXPOSURE": 0.25,
+      "CAP_PROP_EXPOSURE": -7,
+      "CAP_PROP_GAIN": 0,
+      "CAP_PROP_AUTO_WB": 0,
+      "WB_KELVIN": 4600
+    },
+    "stored": "raw sensor orientation",
+    "rot180": false,
+    "frames_csv": "elp_frames_20261103_235936.csv",
+    "file_prefix": "elp",
+    "container": "mp4, fragmented (empty_moov)",
+    "color": "yuv420p full range (pc), BT.601",
+    "recorder": {
+      "requested": "hevc",
+      "codec_at_start": "hevc",
+      "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+      "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+      "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+      "selftest": [
+        {
+          "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+          "found_by": "imageio-ffmpeg 0.6.0",
+          "ok": true,
+          "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+          "encode_s": 0.33,
+          "rc": 0,
+          "frames_in_file": 24,
+          "decoded": 24,
+          "offset_bgr": [
+            -0.624,
+            -0.741,
+            -0.546
+          ],
+          "mae": 0.777
+        }
+      ],
+      "settings": {
+        "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+        "cq": 18,
+        "fps_tag": 78.4,
+        "segment_s": 60.0,
+        "frag_us": 250000,
+        "ring": 48,
+        "backlog": 128,
+        "block_s": 2.0
+      }
+    },
+    "exposure_check": {
+      "method": "ELP_GS1200/calib_intrinsics.py set_and_verify",
+      "set_auto_exposure_returned": true,
+      "set_gain_returned": true,
+      "set_target_returned": true,
+      "target": -7,
+      "gain": 0,
+      "mean_2ms": 4.3,
+      "mean_8ms": 10.6,
+      "ratio_8_2": 2.48,
+      "mean_at_target": 10.6,
+      "exposure_readback": -7.0,
+      "manual_exposure": true
+    },
+    "readback": {
+      "CAP_PROP_AUTO_EXPOSURE": -1.0,
+      "CAP_PROP_EXPOSURE": -7.0,
+      "CAP_PROP_GAIN": 0.0,
+      "CAP_PROP_AUTO_WB": 0.0,
+      "WB_KELVIN": 4600.0
+    },
+    "measured": {
+      "frames_read": 13295,
+      "frames_written": 13295,
+      "frames_dropped_queue": 0,
+      "read_fails": 0,
+      "segments": 3,
+      "duration_s": 157.782,
+      "fps_measured": 84.26,
+      "fps_at_open": 84.3,
+      "recorder": {
+        "requested": "hevc",
+        "codec_at_start": "hevc",
+        "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+        "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+        "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+        "selftest": [
+          {
+            "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+            "found_by": "imageio-ffmpeg 0.6.0",
+            "ok": true,
+            "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+            "encode_s": 0.33,
+            "rc": 0,
+            "frames_in_file": 24,
+            "decoded": 24,
+            "offset_bgr": [
+              -0.624,
+              -0.741,
+              -0.546
+            ],
+            "mae": 0.777
+          }
+        ],
+        "settings": {
+          "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+          "cq": 18,
+          "fps_tag": 78.4,
+          "segment_s": 60.0,
+          "frag_us": 250000,
+          "ring": 48,
+          "backlog": 128,
+          "block_s": 2.0
+        },
+        "codec_at_end": "hevc",
+        "fallbacks": [],
+        "segments_hevc": [
+          {
+            "segment": 1,
+            "file": "elp_20261103_235936_001_20261104_000327.mp4",
+            "codec": "hevc",
+            "rows": 4989,
+            "frames_in_file": 4989,
+            "rc": 0,
+            "bytes": 159541361,
+            "ok": true
+          },
+          {
+            "segment": 2,
+            "file": "elp_20261103_235936_002_20261104_000427.mp4",
+            "codec": "hevc",
+            "rows": 5078,
+            "frames_in_file": 5078,
+            "rc": 0,
+            "bytes": 162385563,
+            "ok": true
+          },
+          {
+            "segment": 3,
+            "file": "elp_20261103_235936_003_20261104_000527.mp4",
+            "codec": "hevc",
+            "rows": 3228,
+            "frames_in_file": 3228,
+            "rc": 0,
+            "bytes": 103354131,
+            "ok": true
+          }
+        ],
+        "lost_video_frames": 0,
+        "queue_peak": 8,
+        "frames_to_hevc": 13295,
+        "write_ms": {
+          "p50": 1.016,
+          "p99": 2.753,
+          "p999": 4.629,
+          "max": 110.66
+        }
+      }
+    },
+    "counters_last": {
+      "frames_read": 13250,
+      "frames_written": 13202,
+      "dropped_queue": 0,
+      "q_size": 0,
+      "q_peak": 8,
+      "read_fails": 0,
+      "segments": 3,
+      "codec": "hevc",
+      "bytes_on_disk": 423118399,
+      "fps_window": 86.1
+    }
+  },
+  "elp_b": {
+    "role": "elpB",
+    "name": "Global Shutter Camera",
+    "instance_match": "7&3b60b935",
+    "usb_instance": "7&3b60b935&0&0000",
+    "camera_index": 4,
+    "backend": "CAP_DSHOW",
+    "fourcc_in": "MJPG",
+    "resolution": [
+      1920,
+      1200
+    ],
+    "fps_requested": 60,
+    "fourcc": "hevc_nvenc",
+    "jpeg_quality": null,
+    "segment_minutes": 1.0,
+    "controls": {
+      "CAP_PROP_AUTO_EXPOSURE": 0.25,
+      "CAP_PROP_EXPOSURE": -7,
+      "CAP_PROP_GAIN": 0,
+      "CAP_PROP_AUTO_WB": 0,
+      "WB_KELVIN": 4600
+    },
+    "stored": "raw sensor orientation",
+    "rot180": false,
+    "frames_csv": "elpB_frames_20261103_235936.csv",
+    "file_prefix": "elpB",
+    "container": "mp4, fragmented (empty_moov)",
+    "color": "yuv420p full range (pc), BT.601",
+    "recorder": {
+      "requested": "hevc",
+      "codec_at_start": "hevc",
+      "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+      "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+      "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+      "selftest": [
+        {
+          "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+          "found_by": "imageio-ffmpeg 0.6.0",
+          "ok": true,
+          "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+          "encode_s": 0.33,
+          "rc": 0,
+          "frames_in_file": 24,
+          "decoded": 24,
+          "offset_bgr": [
+            -0.624,
+            -0.741,
+            -0.546
+          ],
+          "mae": 0.777
+        }
+      ],
+      "settings": {
+        "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+        "cq": 18,
+        "fps_tag": 78.4,
+        "segment_s": 60.0,
+        "frag_us": 250000,
+        "ring": 48,
+        "backlog": 128,
+        "block_s": 2.0
+      }
+    },
+    "exposure_check": {
+      "method": "ELP_GS1200/calib_intrinsics.py set_and_verify",
+      "set_auto_exposure_returned": true,
+      "set_gain_returned": true,
+      "set_target_returned": true,
+      "target": -7,
+      "gain": 0,
+      "mean_2ms": 4.2,
+      "mean_8ms": 9.9,
+      "ratio_8_2": 2.37,
+      "mean_at_target": 9.9,
+      "exposure_readback": -7.0,
+      "manual_exposure": true
+    },
+    "readback": {
+      "CAP_PROP_AUTO_EXPOSURE": -1.0,
+      "CAP_PROP_EXPOSURE": -7.0,
+      "CAP_PROP_GAIN": 0.0,
+      "CAP_PROP_AUTO_WB": 0.0,
+      "WB_KELVIN": 4600.0
+    },
+    "measured": {
+      "frames_read": 12464,
+      "frames_written": 12464,
+      "frames_dropped_queue": 0,
+      "read_fails": 0,
+      "segments": 3,
+      "duration_s": 158.078,
+      "fps_measured": 78.84,
+      "fps_at_open": 84.24,
+      "recorder": {
+        "requested": "hevc",
+        "codec_at_start": "hevc",
+        "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+        "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+        "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+        "selftest": [
+          {
+            "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+            "found_by": "imageio-ffmpeg 0.6.0",
+            "ok": true,
+            "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+            "encode_s": 0.33,
+            "rc": 0,
+            "frames_in_file": 24,
+            "decoded": 24,
+            "offset_bgr": [
+              -0.624,
+              -0.741,
+              -0.546
+            ],
+            "mae": 0.777
+          }
+        ],
+        "settings": {
+          "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+          "cq": 18,
+          "fps_tag": 78.4,
+          "segment_s": 60.0,
+          "frag_us": 250000,
+          "ring": 48,
+          "backlog": 128,
+          "block_s": 2.0
+        },
+        "codec_at_end": "hevc",
+        "fallbacks": [],
+        "segments_hevc": [
+          {
+            "segment": 1,
+            "file": "elpB_20261103_235936_001_20261104_000327.mp4",
+            "codec": "hevc",
+            "rows": 4768,
+            "frames_in_file": 4768,
+            "rc": 0,
+            "bytes": 152547247,
+            "ok": true
+          },
+          {
+            "segment": 2,
+            "file": "elpB_20261103_235936_002_20261104_000427.mp4",
+            "codec": "hevc",
+            "rows": 4709,
+            "frames_in_file": 4709,
+            "rc": 0,
+            "bytes": 150571042,
+            "ok": true
+          },
+          {
+            "segment": 3,
+            "file": "elpB_20261103_235936_003_20261104_000527.mp4",
+            "codec": "hevc",
+            "rows": 2987,
+            "frames_in_file": 2987,
+            "rc": 0,
+            "bytes": 95645166,
+            "ok": true
+          }
+        ],
+        "lost_video_frames": 0,
+        "queue_peak": 9,
+        "frames_to_hevc": 12464,
+        "write_ms": {
+          "p50": 1.05,
+          "p99": 2.81,
+          "p999": 4.925,
+          "max": 156.64
+        }
+      }
+    },
+    "counters_last": {
+      "frames_read": 12393,
+      "frames_written": 12344,
+      "dropped_queue": 0,
+      "q_size": 0,
+      "q_peak": 9,
+      "read_fails": 0,
+      "segments": 3,
+      "codec": "hevc",
+      "bytes_on_disk": 395681532,
+      "fps_window": 80.9
+    }
+  },
+  "streams": {
+    "elpA": {
+      "role": "elpA",
+      "name": "Global Shutter Camera",
+      "instance_match": "7&325db0ba",
+      "usb_instance": "7&325db0ba&0&0000",
+      "camera_index": 1,
+      "backend": "CAP_DSHOW",
+      "fourcc_in": "MJPG",
+      "resolution": [
+        1920,
+        1200
+      ],
+      "fps_requested": 60,
+      "fourcc": "hevc_nvenc",
+      "jpeg_quality": null,
+      "segment_minutes": 1.0,
+      "controls": {
+        "CAP_PROP_AUTO_EXPOSURE": 0.25,
+        "CAP_PROP_EXPOSURE": -7,
+        "CAP_PROP_GAIN": 0,
+        "CAP_PROP_AUTO_WB": 0,
+        "WB_KELVIN": 4600
+      },
+      "stored": "raw sensor orientation",
+      "rot180": false,
+      "frames_csv": "elp_frames_20261103_235936.csv",
+      "file_prefix": "elp",
+      "container": "mp4, fragmented (empty_moov)",
+      "color": "yuv420p full range (pc), BT.601",
+      "recorder": {
+        "requested": "hevc",
+        "codec_at_start": "hevc",
+        "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+        "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+        "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+        "selftest": [
+          {
+            "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+            "found_by": "imageio-ffmpeg 0.6.0",
+            "ok": true,
+            "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+            "encode_s": 0.33,
+            "rc": 0,
+            "frames_in_file": 24,
+            "decoded": 24,
+            "offset_bgr": [
+              -0.624,
+              -0.741,
+              -0.546
+            ],
+            "mae": 0.777
+          }
+        ],
+        "settings": {
+          "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+          "cq": 18,
+          "fps_tag": 78.4,
+          "segment_s": 60.0,
+          "frag_us": 250000,
+          "ring": 48,
+          "backlog": 128,
+          "block_s": 2.0
+        }
+      },
+      "exposure_check": {
+        "method": "ELP_GS1200/calib_intrinsics.py set_and_verify",
+        "set_auto_exposure_returned": true,
+        "set_gain_returned": true,
+        "set_target_returned": true,
+        "target": -7,
+        "gain": 0,
+        "mean_2ms": 4.3,
+        "mean_8ms": 10.6,
+        "ratio_8_2": 2.48,
+        "mean_at_target": 10.6,
+        "exposure_readback": -7.0,
+        "manual_exposure": true
+      },
+      "readback": {
+        "CAP_PROP_AUTO_EXPOSURE": -1.0,
+        "CAP_PROP_EXPOSURE": -7.0,
+        "CAP_PROP_GAIN": 0.0,
+        "CAP_PROP_AUTO_WB": 0.0,
+        "WB_KELVIN": 4600.0
+      },
+      "measured": {
+        "frames_read": 13295,
+        "frames_written": 13295,
+        "frames_dropped_queue": 0,
+        "read_fails": 0,
+        "segments": 3,
+        "duration_s": 157.782,
+        "fps_measured": 84.26,
+        "fps_at_open": 84.3,
+        "recorder": {
+          "requested": "hevc",
+          "codec_at_start": "hevc",
+          "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+          "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+          "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+          "selftest": [
+            {
+              "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+              "found_by": "imageio-ffmpeg 0.6.0",
+              "ok": true,
+              "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+              "encode_s": 0.33,
+              "rc": 0,
+              "frames_in_file": 24,
+              "decoded": 24,
+              "offset_bgr": [
+                -0.624,
+                -0.741,
+                -0.546
+              ],
+              "mae": 0.777
+            }
+          ],
+          "settings": {
+            "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+            "cq": 18,
+            "fps_tag": 78.4,
+            "segment_s": 60.0,
+            "frag_us": 250000,
+            "ring": 48,
+            "backlog": 128,
+            "block_s": 2.0
+          },
+          "codec_at_end": "hevc",
+          "fallbacks": [],
+          "segments_hevc": [
+            {
+              "segment": 1,
+              "file": "elp_20261103_235936_001_20261104_000327.mp4",
+              "codec": "hevc",
+              "rows": 4989,
+              "frames_in_file": 4989,
+              "rc": 0,
+              "bytes": 159541361,
+              "ok": true
+            },
+            {
+              "segment": 2,
+              "file": "elp_20261103_235936_002_20261104_000427.mp4",
+              "codec": "hevc",
+              "rows": 5078,
+              "frames_in_file": 5078,
+              "rc": 0,
+              "bytes": 162385563,
+              "ok": true
+            },
+            {
+              "segment": 3,
+              "file": "elp_20261103_235936_003_20261104_000527.mp4",
+              "codec": "hevc",
+              "rows": 3228,
+              "frames_in_file": 3228,
+              "rc": 0,
+              "bytes": 103354131,
+              "ok": true
+            }
+          ],
+          "lost_video_frames": 0,
+          "queue_peak": 8,
+          "frames_to_hevc": 13295,
+          "write_ms": {
+            "p50": 1.016,
+            "p99": 2.753,
+            "p999": 4.629,
+            "max": 110.66
+          }
+        }
+      },
+      "counters_last": {
+        "frames_read": 13250,
+        "frames_written": 13202,
+        "dropped_queue": 0,
+        "q_size": 0,
+        "q_peak": 8,
+        "read_fails": 0,
+        "segments": 3,
+        "codec": "hevc",
+        "bytes_on_disk": 423118399,
+        "fps_window": 86.1
+      }
+    },
+    "elpB": {
+      "role": "elpB",
+      "name": "Global Shutter Camera",
+      "instance_match": "7&3b60b935",
+      "usb_instance": "7&3b60b935&0&0000",
+      "camera_index": 4,
+      "backend": "CAP_DSHOW",
+      "fourcc_in": "MJPG",
+      "resolution": [
+        1920,
+        1200
+      ],
+      "fps_requested": 60,
+      "fourcc": "hevc_nvenc",
+      "jpeg_quality": null,
+      "segment_minutes": 1.0,
+      "controls": {
+        "CAP_PROP_AUTO_EXPOSURE": 0.25,
+        "CAP_PROP_EXPOSURE": -7,
+        "CAP_PROP_GAIN": 0,
+        "CAP_PROP_AUTO_WB": 0,
+        "WB_KELVIN": 4600
+      },
+      "stored": "raw sensor orientation",
+      "rot180": false,
+      "frames_csv": "elpB_frames_20261103_235936.csv",
+      "file_prefix": "elpB",
+      "container": "mp4, fragmented (empty_moov)",
+      "color": "yuv420p full range (pc), BT.601",
+      "recorder": {
+        "requested": "hevc",
+        "codec_at_start": "hevc",
+        "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+        "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+        "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+        "selftest": [
+          {
+            "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+            "found_by": "imageio-ffmpeg 0.6.0",
+            "ok": true,
+            "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+            "encode_s": 0.33,
+            "rc": 0,
+            "frames_in_file": 24,
+            "decoded": 24,
+            "offset_bgr": [
+              -0.624,
+              -0.741,
+              -0.546
+            ],
+            "mae": 0.777
+          }
+        ],
+        "settings": {
+          "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+          "cq": 18,
+          "fps_tag": 78.4,
+          "segment_s": 60.0,
+          "frag_us": 250000,
+          "ring": 48,
+          "backlog": 128,
+          "block_s": 2.0
+        }
+      },
+      "exposure_check": {
+        "method": "ELP_GS1200/calib_intrinsics.py set_and_verify",
+        "set_auto_exposure_returned": true,
+        "set_gain_returned": true,
+        "set_target_returned": true,
+        "target": -7,
+        "gain": 0,
+        "mean_2ms": 4.2,
+        "mean_8ms": 9.9,
+        "ratio_8_2": 2.37,
+        "mean_at_target": 9.9,
+        "exposure_readback": -7.0,
+        "manual_exposure": true
+      },
+      "readback": {
+        "CAP_PROP_AUTO_EXPOSURE": -1.0,
+        "CAP_PROP_EXPOSURE": -7.0,
+        "CAP_PROP_GAIN": 0.0,
+        "CAP_PROP_AUTO_WB": 0.0,
+        "WB_KELVIN": 4600.0
+      },
+      "measured": {
+        "frames_read": 12464,
+        "frames_written": 12464,
+        "frames_dropped_queue": 0,
+        "read_fails": 0,
+        "segments": 3,
+        "duration_s": 158.078,
+        "fps_measured": 78.84,
+        "fps_at_open": 84.24,
+        "recorder": {
+          "requested": "hevc",
+          "codec_at_start": "hevc",
+          "reason": "self test passed (imageio-ffmpeg 0.6.0)",
+          "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+          "ffmpeg_version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+          "selftest": [
+            {
+              "ffmpeg": "ffmpeg-win-x86_64-v7.1.exe",
+              "found_by": "imageio-ffmpeg 0.6.0",
+              "ok": true,
+              "version": "ffmpeg version 7.1-essentials_build-www.gyan.dev Copyright (c) 2000-2024 the FFmpeg developers",
+              "encode_s": 0.33,
+              "rc": 0,
+              "frames_in_file": 24,
+              "decoded": 24,
+              "offset_bgr": [
+                -0.624,
+                -0.741,
+                -0.546
+              ],
+              "mae": 0.777
+            }
+          ],
+          "settings": {
+            "cmd": "ffmpeg -hide_banner -nostats -loglevel warning -y -f rawvideo -pix_fmt bgr24 -video_size WxH -framerate 78.4 -i pipe:0 -an -fps_mode passthrough -vf scale=out_range=full:out_color_matrix=bt601,format=yuv420p -color_range pc -colorspace bt470bg -color_primaries bt470bg -color_trc smpte170m -c:v hevc_nvenc -preset p4 -tune hq -rc vbr -cq 18 -b:v 0 -movflags +frag_keyframe+empty_moov+default_base_moof -frag_duration 250000 -flush_packets 1 -f mp4 <file>.mp4",
+            "cq": 18,
+            "fps_tag": 78.4,
+            "segment_s": 60.0,
+            "frag_us": 250000,
+            "ring": 48,
+            "backlog": 128,
+            "block_s": 2.0
+          },
+          "codec_at_end": "hevc",
+          "fallbacks": [],
+          "segments_hevc": [
+            {
+              "segment": 1,
+              "file": "elpB_20261103_235936_001_20261104_000327.mp4",
+              "codec": "hevc",
+              "rows": 4768,
+              "frames_in_file": 4768,
+              "rc": 0,
+              "bytes": 152547247,
+              "ok": true
+            },
+            {
+              "segment": 2,
+              "file": "elpB_20261103_235936_002_20261104_000427.mp4",
+              "codec": "hevc",
+              "rows": 4709,
+              "frames_in_file": 4709,
+              "rc": 0,
+              "bytes": 150571042,
+              "ok": true
+            },
+            {
+              "segment": 3,
+              "file": "elpB_20261103_235936_003_20261104_000527.mp4",
+              "codec": "hevc",
+              "rows": 2987,
+              "frames_in_file": 2987,
+              "rc": 0,
+              "bytes": 95645166,
+              "ok": true
+            }
+          ],
+          "lost_video_frames": 0,
+          "queue_peak": 9,
+          "frames_to_hevc": 12464,
+          "write_ms": {
+            "p50": 1.05,
+            "p99": 2.81,
+            "p999": 4.925,
+            "max": 156.64
+          }
+        }
+      },
+      "counters_last": {
+        "frames_read": 12393,
+        "frames_written": 12344,
+        "dropped_queue": 0,
+        "q_size": 0,
+        "q_peak": 9,
+        "read_fails": 0,
+        "segments": 3,
+        "codec": "hevc",
+        "bytes_on_disk": 395681532,
+        "fps_window": 80.9
+      }
+    },
+    "bore1": {
+      "role": "bore1",
+      "camera_index": 3,
+      "tag": "",
+      "frames_csv": "borescope_frames_20261103_235936.csv",
+      "name": "Teslong Camera",
+      "instance_match": "8&21d1e258",
+      "usb_instance": "8&21d1e258&0&0000",
+      "counters_last": {
+        "frames_read": 4680,
+        "frames_written": 4680,
+        "dropped_queue": "",
+        "q_size": "",
+        "q_peak": "",
+        "read_fails": "",
+        "segments": 1,
+        "codec": "mp4v",
+        "bytes_on_disk": 69468204,
+        "fps_window": 30.2
+      }
+    },
+    "bore2": {
+      "role": "bore2",
+      "camera_index": 2,
+      "tag": "_bore2",
+      "frames_csv": "borescope_frames_20261103_235936_bore2.csv",
+      "name": "Teslong Camera",
+      "instance_match": "8&2e083781",
+      "usb_instance": "8&2e083781&0&0000",
+      "counters_last": {
+        "frames_read": 4728,
+        "frames_written": 4728,
+        "dropped_queue": "",
+        "q_size": "",
+        "q_peak": "",
+        "read_fails": "",
+        "segments": 1,
+        "codec": "mp4v",
+        "bytes_on_disk": 58196012,
+        "fps_window": 30.2
+      }
+    }
+  },
+  "realtime": {
+    "mode": "closed",
+    "cfg": {
+      "w12_t": 5.25,
+      "v_ref_mm_s": 12.0,
+      "alpha_m": 0.72,
+      "tau_v": 0.28,
+      "t_u": 0.25,
+      "t_f": 0.25,
+      "win_mm": 3.0,
+      "b1_win_mm": 1.5,
+      "s_use": 15.0,
+      "d_min": 12.0,
+      "b1_d": 5.0,
+      "bin_mm": 0.5,
+      "slow_from": 2,
+      "ov_base": 40.0,
+      "ov_min": 12,
+      "ov_max": 100,
+      "ov_outside": 40,
+      "ov_default": 40,
+      "v_max_mm_s": 30.0,
+      "v_min_mm_s": 3.4,
+      "ov_floor": 12,
+      "fallback_ramp_s": 2.0,
+      "wd_s": 1.0,
+      "ring_fresh_s": 0.2,
+      "wd_s_min": 27.0,
+      "wd_s_max": 168.0,
+      "z_tol": 0.5,
+      "window_ignore_z": false,
+      "window_xy_tol": 1.5,
+      "step_seq": [
+        50,
+        0,
+        100,
+        50,
+        28,
+        90,
+        50,
+        28,
+        90
+      ],
+      "step_hold_s": 6.0,
+      "speed_check": "latch",
+      "speed_tol": 0.15,
+      "speed_legs": 2,
+      "elp_b": true,
+      "b_from_leg": 1,
+      "dir_win_s": 0.1,
+      "dir_vmin": 2.0,
+      "bore2": "off",
+      "bore_s_use": 0.0
+    },
+    "rig": "rig_cage2opt_elpA_261102_m2.json",
+    "rig_b": "rig_cage2opt_elpB_261102.json",
+    "pattern": "pattern/pattern_usr_ELP_ARC2_261103.json",
+    "version": "v3 realtime_cl_cage2_arcbore_261103 semi",
+    "fan": {
+      "ctrl_max_deg": 90.0,
+      "bore_max_deg": 90.0,
+      "geometry": "semi"
+    },
+    "law": {
+      "plan": "Bpp",
+      "primary": "",
+      "sources": "elp",
+      "target": "const",
+      "ff_lead_s": 0.08,
+      "ff_blend_lo": 4.0,
+      "ff_blend_hi": 2.0,
+      "integ": "gated",
+      "n0": 3.0,
+      "g_min": 0.02,
+      "step_n": 3,
+      "step_thr": 0.15,
+      "n_after_step": 1.0,
+      "gain_elp": 1.0,
+      "gain_bore1": 1.0,
+      "db": 0.02,
+      "rate_max": 0.4,
+      "ack": false,
+      "act_mm": 1.0,
+      "tau_slow": 20.0,
+      "t_u": 0.25,
+      "u0": 0.0,
+      "slow_from": 2,
+      "blind_mix": 1.0,
+      "start_mix": 1.0,
+      "tau_model": 0.0,
+      "blind_tau": 0.0,
+      "blind_ref": "prev",
+      "blind_dir": "up",
+      "blind_dumax": 0.693,
+      "s_head": 32.0,
+      "nb_min": 3,
+      "age_max_elp": 0.2,
+      "age_max_bore1": 0.3,
+      "lag_max_elp": 4.0,
+      "lag_max_bore1": 2.0,
+      "vstar_lo_mm_s": 1.6240233988393524,
+      "vstar_hi_mm_s": 32.61938194150854,
+      "jump_max": 0.3,
+      "n_on": 4,
+      "n_off": 2,
+      "L_A": 175.0,
+      "freeze_start": 3.0,
+      "freeze_end": 4.0,
+      "s_end_excl": 6.0,
+      "force_seg": {},
+      "guard_bed": true,
+      "nobed_s": 1.0,
+      "tgt_schedule": "const",
+      "tgt_seq": [
+        4.75,
+        5.25,
+        5.75,
+        5.25,
+        4.75,
+        5.25,
+        5.75,
+        5.25
+      ],
+      "s_tgt_switch": 87.5,
+      "w_base": 5.25,
+      "alpha_m": 0.72,
+      "v_start_mm_s": 12.0,
+      "ol_sched_mm_s": [],
+      "v_ref_mm_s": 12.0
+    },
+    "order": [
+      "elp"
+    ],
+    "speed": {
+      "v_max_mm_s": 30.0,
+      "v100_min_mm_s": 30.0,
+      "constant_speed": true,
+      "ov_ref": 40.0,
+      "v_from": "segs column v100_mm_s",
+      "ov_base_rule": 40.0,
+      "ov_base": 40.0,
+      "ov_base_given": null,
+      "v_start_mm_s": 12.0,
+      "ov_default": 40,
+      "src": "usr_ELP_ARC2_OL_261103",
+      "v_min_mm_s": 3.4,
+      "ov_floor": 12,
+      "ov_min_outer": 1,
+      "ov_min": 12,
+      "target_ovcmd_m1_1p5": [
+        "W 5.25: OvCmd 40-60 (12.0-18.0 mm/s)"
+      ],
+      "target_unreachable": []
+    },
+    "elp_b": "on",
+    "control_sources": "elp",
+    "b_mdf_side": "pos",
+    "law_b": {
+      "plan": "Bpp",
+      "primary": "elp",
+      "sources": "elp",
+      "target": "const",
+      "ff_lead_s": 0.08,
+      "ff_blend_lo": 4.0,
+      "ff_blend_hi": 2.0,
+      "integ": "gated",
+      "n0": 3.0,
+      "g_min": 0.02,
+      "step_n": 3,
+      "step_thr": 0.15,
+      "n_after_step": 1.0,
+      "gain_elp": 1.0,
+      "gain_bore1": 1.0,
+      "db": 0.02,
+      "rate_max": 0.4,
+      "ack": false,
+      "act_mm": 1.0,
+      "tau_slow": 20.0,
+      "t_u": 0.25,
+      "u0": 0.0,
+      "slow_from": 2,
+      "blind_mix": 1.0,
+      "start_mix": 1.0,
+      "tau_model": 0.0,
+      "blind_tau": 0.0,
+      "blind_ref": "prev",
+      "blind_dir": "up",
+      "blind_dumax": 0.693,
+      "s_head": 32.0,
+      "nb_min": 3,
+      "age_max_elp": 0.2,
+      "age_max_bore1": 0.3,
+      "lag_max_elp": 4.0,
+      "lag_max_bore1": 2.0,
+      "vstar_lo_mm_s": 1.6240233988393524,
+      "vstar_hi_mm_s": 32.61938194150854,
+      "jump_max": 0.3,
+      "n_on": 4,
+      "n_off": 2,
+      "L_A": 175.0,
+      "freeze_start": 3.0,
+      "freeze_end": 4.0,
+      "s_end_excl": 6.0,
+      "force_seg": {},
+      "guard_bed": false,
+      "nobed_s": 1.0,
+      "tgt_schedule": "const",
+      "tgt_seq": [
+        4.75,
+        5.25,
+        5.75,
+        5.25,
+        4.75,
+        5.25,
+        5.75,
+        5.25
+      ],
+      "s_tgt_switch": 87.5,
+      "w_base": 5.25,
+      "alpha_m": 0.72,
+      "v_start_mm_s": 12.0,
+      "ol_sched_mm_s": [],
+      "v_ref_mm_s": 12.0
+    },
+    "streams": [
+      "elpA",
+      "elpB",
+      "bore1",
+      "bore2"
+    ],
+    "bore_dual": {
+      "bore2": "shadow",
+      "bore2_ctl": "off",
+      "bore_sd_max": 0.05,
+      "bore_s_use": 0.0,
+      "bore1_offset_mm": 0.0,
+      "bore2_offset_mm": 0.0,
+      "bore1_weights": "bore_weights/deploy_bore1_cage2ft_261103/weights",
+      "bore1_quality": "bore_weights/deploy_bore1_cage2ft_261103/quality_limits_cage2_raw.json",
+      "bore2_weights": "bore_weights/deploy_bore2_cage2ft_261103/weights",
+      "bore2_quality": "bore_weights/deploy_bore2_cage2ft_261103/quality_limits_bore2_live_est.json",
+      "bore1_head": true,
+      "bore2_head": true
+    }
+  },
+  "bore1_shadow": {
+    "frames": 4636,
+    "skipped": 39,
+    "predicted": 1606,
+    "pushed": 573,
+    "errors": 0,
+    "thread_exit": "stopped",
+    "ms_mean": 9.96620031082388,
+    "ms_p95": 13.045249972492456,
+    "ms_max": 118.01920016296208,
+    "shadow_rows": 602,
+    "shadow_errors": 0,
+    "elp_rows_seen": 4153
+  },
+  "bore2": {
+    "mode": "shadow",
+    "frames": 4683,
+    "skipped": 41,
+    "predicted": 1618,
+    "pushed": 617,
+    "errors": 0,
+    "thread_exit": "stopped",
+    "ms_mean": 10.160529296165988,
+    "ms_p95": 13.58009501127526
+  },
+  "v3_summary": {
+    "speed_check": [
+      {
+        "leg": 1,
+        "ratios": {
+          "12@s0": 0.9855655243073519,
+          "12@s78": 0.9832843667754337
+        },
+        "ok": true
+      },
+      {
+        "leg": 2,
+        "ratios": {
+          "12@s0": 0.9797732551447542,
+          "12@s122": 0.9826933821265539
+        },
+        "ok": true
+      }
+    ],
+    "speed_alarm": false,
+    "n_corr": 0,
+    "n_switch": 13,
+    "n_updates": 627,
+    "n_corr_b": 0,
+    "n_source_switches": 39,
+    "readout_a": {
+      "frames": 10856,
+      "rows_out": 4153,
+      "skipped": 2340,
+      "ms_mean": 10.48,
+      "ms_p95": 14.36
+    },
+    "readout_b": {
+      "frames": 10141,
+      "rows_out": 3541,
+      "skipped": 2203,
+      "ms_mean": 12.27,
+      "ms_p95": 16.02
+    }
+  }
+}

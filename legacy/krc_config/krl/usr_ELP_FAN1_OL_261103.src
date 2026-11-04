@@ -1,0 +1,157 @@
+&ACCESS RVP
+&REL 1
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF usr_ELP_FAN1_OL_261103 ( )
+; laptop 11-03: renamed from usr_ELP_FAN1_OL_DRAFT_261103 (desktop 1103 package, sha F7DFED20); motion unchanged
+;==========================================================================
+; usr_ELP_FAN1_OL_261103 - DRAFT, NOT RUN, NOT REVIEWED. desktop, 2026-11-03 (plan day_next).
+;   Open-loop diagonal fan FAN1 (user 11-03 question 8). For run_cl.py --mode prep --prep-ovcmd 40 ONLY
+;   (realtime_cl_cage2_261102): fixed OvCmd 40 in every RSI reply, all four streams recorded, no control.
+;   Lines $VEL.CP 0.030 -> 12 mm/s at OvCmd 40; hops 0.024 -> 9.6 mm/s. Descent + wipe-in 0.030 -> 12 mm/s
+;   (CLp4: 0.012 at the closed-mode override 100 = the same 12 mm/s).
+; FRAME = usr_ELP_R1v30_CLp4_261103.src (laptop 11-03): tool 3, base 0, INI, home PTP, RPM 0 before RSI,
+;   RSI_CREATE / RSI_ON (RSI_OV4), hover PTP (1025, -530, 60) S 'B110', WAIT SEC 0, 400 rpm, WAIT SEC 4,
+;   120 rpm, descent at X 1025, wipe-in along -X at Y -530, RSI_OFF after the last line, rpm 0, wipe-out +X past
+;   the bed edge, lift, travel at Z ~62 to the 10-06 end pose, home PTP. Only the print section differs.
+; GEOMETRY: tool A 0 B 90 C 0 on every point (no tool rotation). Z = z_cmd(x) of the CLp pattern json
+;   (0.8 + 1.5 (x - 600) / 370): the same nozzle height CLp used at every X. Print lines inside X 790..945,
+;   Y -530..-284 (CLp box X 770..1025, Y -530..-275). Line list and checks: FAN1_segs_DRAFT_261103.csv,
+;   fan_build_261103_out.txt, CORNER_FAN_design_261103.md.
+; PATH: lead (ELP-A 0 deg, 155 mm) -> col L ascending, 60 mm lines: B+15 A-15 B+30 A-30 B+45 A-45 ->
+;   top line B0 (ELP-B 0 deg, 155 mm) -> col R descending, X 885..945: A+10 B-5 A+15 B-10 A+20 B-15 A+25 B-20.
+;   A = line moving -X-ish read by ELP-A (path angle 180 + delta); B = moving +X-ish read by ELP-B (angle delta).
+;   Hops 10 mm +Y (col L) / -Y (col R), printed like the CLp hops.
+; MOTION REPORT (feedback-motion-alarm-rules): M1 hover PTP = the CLp motion (approved exception), at OvCmd 40;
+;   prints <= 12 mm/s, travel 30 mm/s. M2: new XY = the wipe-out at Y -494.31 (CLp: -275), inside the CLp XY
+;   hull. M3: none (Z = CLp Z law, RSI moves no position).
+; THE PENDANT OVERRIDE IS OVERWRITTEN EVERY 4 ms FROM RSI_ON TO RSI_OFF. Preview / pendant must read 40 in
+;   the first 2 s after Start; anything else -> STOP (a 100 reply = 30 mm/s lines).
+;==========================================================================
+DECL INT OV_SAVED
+DECL INT ret
+DECL INT CONTID
+
+;FOLD INI
+BAS (#INITMOV,0 )
+;BASE IS 0, TOOL IS 3, FIXED START POS
+BAS(#TOOL, 3)
+BAS(#BASE, 0)
+BAS(#VEL_PTP, 10)
+PDAT_ACT.ACC = 50
+PDAT_ACT.APO_DIST = 50
+$BWDSTART = TRUE
+$VEL.CP=0.2
+$ADVANCE=3
+;ENDFOLD (INI)
+
+OV_SAVED=$OV_PRO
+
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+;EXTRUDER STOPPED UNTIL THE HOVER PURGE
+PelletExtruderRPM = 0
+
+;RSI INI
+ret = RSI_CREATE("RSI_OV4.rsi", CONTID, TRUE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+ret = RSI_ON(#RELATIVE)
+IF (ret <> RSIOK) THEN
+    HALT
+ENDIF
+
+;PURGE HOVER PAST THE BED'S MAX X (= CLp4 L89-L96)
+PTP {X 1025.0, Y -530.0, Z 60, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0, S 'B110'}
+WAIT SEC 0
+PelletExtruderRPM = 400
+WAIT SEC 4
+PelletExtruderRPM = 120
+;DESCENT + WIPE-IN: 0.030 AT OVCMD 40 = 12 mm/s (CLp4 0.012 AT 100 = 12 mm/s)
+$VEL.CP=0.030
+LIN {X 1025.0, Y -530.0, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 945.0, Y -530.0, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+
+;PRINT SECTION FAN1 (one $VEL.CP before every LIN; comment = segs row)
+$VEL.CP=0.030
+LIN {X 790.00, Y -530.00, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 1 A0_lead
+$VEL.CP=0.024
+LIN {X 790.00, Y -520.00, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 2 hop
+$VEL.CP=0.030
+LIN {X 847.96, Y -504.47, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 3 B+15
+$VEL.CP=0.024
+LIN {X 847.96, Y -494.47, Z 1.81, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 4 hop
+$VEL.CP=0.030
+LIN {X 790.00, Y -478.94, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 5 A-15
+$VEL.CP=0.024
+LIN {X 790.00, Y -468.94, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 6 hop
+$VEL.CP=0.030
+LIN {X 841.96, Y -438.94, Z 1.78, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 7 B+30
+$VEL.CP=0.024
+LIN {X 841.96, Y -428.94, Z 1.78, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 8 hop
+$VEL.CP=0.030
+LIN {X 790.00, Y -398.94, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 9 A-30
+$VEL.CP=0.024
+LIN {X 790.00, Y -388.94, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 10 hop
+$VEL.CP=0.030
+LIN {X 832.43, Y -346.52, Z 1.74, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 11 B+45
+$VEL.CP=0.024
+LIN {X 832.43, Y -336.52, Z 1.74, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 12 hop
+$VEL.CP=0.030
+LIN {X 790.00, Y -294.09, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 13 A-45
+$VEL.CP=0.024
+LIN {X 790.00, Y -284.09, Z 1.57, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 14 hop
+$VEL.CP=0.030
+LIN {X 945.00, Y -284.09, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 15 B0_top
+$VEL.CP=0.024
+LIN {X 945.00, Y -294.09, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 16 hop
+$VEL.CP=0.030
+LIN {X 885.00, Y -304.67, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 17 A+10
+$VEL.CP=0.024
+LIN {X 885.00, Y -314.67, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 18 hop
+$VEL.CP=0.030
+LIN {X 945.00, Y -319.92, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 19 B-5
+$VEL.CP=0.024
+LIN {X 945.00, Y -329.92, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 20 hop
+$VEL.CP=0.030
+LIN {X 885.00, Y -345.99, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 21 A+15
+$VEL.CP=0.024
+LIN {X 885.00, Y -355.99, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 22 hop
+$VEL.CP=0.030
+LIN {X 945.00, Y -366.57, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 23 B-10
+$VEL.CP=0.024
+LIN {X 945.00, Y -376.57, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 24 hop
+$VEL.CP=0.030
+LIN {X 885.00, Y -398.41, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 25 A+20
+$VEL.CP=0.024
+LIN {X 885.00, Y -408.41, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 26 hop
+$VEL.CP=0.030
+LIN {X 945.00, Y -424.49, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 27 B-15
+$VEL.CP=0.024
+LIN {X 945.00, Y -434.49, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 28 hop
+$VEL.CP=0.030
+LIN {X 885.00, Y -462.47, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 29 A+25
+$VEL.CP=0.024
+LIN {X 885.00, Y -472.47, Z 1.96, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS ;seg 30 hop
+$VEL.CP=0.030
+LIN {X 945.00, Y -494.31, Z 2.20, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} ;seg 31 B-20
+
+;ADVANCE STOP: RSI_OFF ONLY AFTER THE LAST LINE, THEN RESTORE THE PENDANT OVERRIDE (RSI_OFF DOES NOT)
+WAIT SEC 0
+ret = RSI_OFF()
+$OV_PRO=OV_SAVED
+
+;EXTRUDER OFF BEFORE THE TRAVEL
+PelletExtruderRPM = 0
+
+;WIPE OUT ALONG +X PAST THE BED'S MAX X AT THE LAST LINE'S Y (NEW XY, SEE HEADER M2), LIFT 60, TRAVEL, HOME
+$VEL.CP=0.012
+LIN {X 1025.0, Y -494.31, Z 2.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+LIN {X 1025.0, Y -494.31, Z 62.52, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+$VEL.CP=0.03
+LIN {X 847.5, Y -530.0, Z 61.80, A 0, B 90, C -0, E1 0, E2 0, E3 0, E4 0} C_DIS
+PTP  {A1 33,A2 -90,A3 100,A4 5,A5 -10,A6 -5,E1 0,E2 0,E3 0,E4 0}
+
+END
