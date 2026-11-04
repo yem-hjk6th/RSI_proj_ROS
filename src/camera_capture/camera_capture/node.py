@@ -9,8 +9,8 @@ Start-up (as ``run_cl.py`` / ``ElpCam``):
 Topics (node name ``<name>``, e.g. ``elp``, ``bore1``):
 - ``/<name>/image_raw`` (``sensor_msgs/Image``, ``bgr8``, best effort, depth 1): every frame while it keeps up,
   ``header.stamp`` = capture time on the clock of ``KrcState.stamp``. Only built while someone subscribes.
-- ``/<name>/preview`` (``bgr8``, reliable, depth 1): decimated to ``preview_hz`` (5) by capture time, downscaled to
-  ``preview_width`` (640).
+- ``/<name>/preview`` (``bgr8``, reliable, depth 1): decimated to ``preview_hz`` (5) by capture time (the first frame
+  of each period, from the first period boundary after the start), downscaled to ``preview_width`` (640).
 
 A publisher thread takes the newest frame; when it falls behind it skips frames (counted), and the capture and the
 recording never wait for it. At the end the recorder drains its queue into the files and the node writes the
@@ -94,7 +94,9 @@ class CameraNode(Node):
         self.preview_topic = g("preview_topic") or f"/{name}/preview"
         self.frame_id = g("frame_id") or name
         self.publish_raw = bool(g("publish_raw"))
-        self.decim = self.cam.preview = Decimator(float(g("preview_hz")))     # decided on the capture thread
+        # decided on the capture thread; from the first period boundary on (anchored), every preview is the first frame
+        # of its period
+        self.decim = self.cam.preview = Decimator(float(g("preview_hz")), anchored=True)
         self.preview_width = int(g("preview_width"))
         self.n_raw = self.n_preview = self.n_skipped = self.n_pub_errors = 0
 
