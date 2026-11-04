@@ -14,6 +14,10 @@ The legacy thread also waited (``wait_s``, 0.06 s) for an RSI packet at or after
 belongs to the caller (the node), because it is about when the ring is read, not about what is computed.
 A head that raises is the caller's business as well: the legacy counted it in ``errors`` and wrote no row.
 
+Fan and semicircle patterns (T13): the gate is ``gate.make_gate(pattern, max_deg, angle_at)`` (the path gate, reason
+``angle`` added); on a semi pattern each passed frame also writes a gate log row (``gate_log``, a
+``path_geometry.gates.GateLog``), before the head runs, as the legacy gate did.
+
 No ROS imports.
 """
 import math
@@ -23,7 +27,7 @@ from typing import Callable, List, Optional
 
 import numpy as np
 
-from .gate import LAB_BACK, B1Gate, bore1_gate
+from .gate import LAB_BACK, B1Gate, make_gate
 from .head import Bore1Pred
 
 B1_COLS = ["frame", "t_frame", "t_done", "gate", "leg", "s_tip", "s_dep", "x", "y", "z", "w", "w_s0", "w_s1", "w_s2",
@@ -66,7 +70,7 @@ class Bore1Row:
     frame: int
     t_frame: float
     t_done: float
-    gate: str                           # ok | stale | no_track | z_or_dir | leg_or_x
+    gate: str                           # ok | stale | no_track | z_or_dir | leg_or_x | angle (fan / semi)
     g: Optional[B1Gate] = None
     pred: Optional[Bore1Pred] = None
     pushed: bool = False
@@ -124,23 +128,29 @@ class Stats:
 
 
 class Bore1Readout:
-    """gate -> head -> row. ``pattern``: width_readout_elp Pattern; ``head``: a head of head.py."""
+    """gate -> head -> row. ``pattern``: width_readout_elp Pattern, or a path_geometry Pattern (fan / semi; then
+    ``max_deg`` / ``angle_at`` are the angle cap and ``gate_log`` the semi gate log); ``head``: a head of head.py."""
 
-    def __init__(self, pattern, head, sd_max: float = math.inf, drop_bad_q: bool = True):
+    def __init__(self, pattern, head, sd_max: float = math.inf, drop_bad_q: bool = True, max_deg: float = 0.0,
+                 angle_at: str = "tip", gate_log=None):
         self.pat, self.head = pattern, head
         self.sd_max, self.drop_bad_q = float(sd_max), bool(drop_bad_q)
+        self.gate = make_gate(pattern, max_deg, angle_at)
+        self.gate_log = gate_log if getattr(pattern, "geometry", None) == "semi" else None
         self.stats = Stats()
 
     def process(self, t_frame: float, ring, frame_idx: int, frame=None,
                 clock: Callable[[], float] = time.perf_counter) -> Bore1Row:
         """One frame at time t_frame. ``frame``: the BGR image, or a callable that returns it (decoded only when the
         gate passes and the head needs it). ``clock`` gives t_done."""
-        g, why = bore1_gate(self.pat, ring, t_frame)
+        g, why = self.gate(self.pat, ring, t_frame)
         st = self.stats
         if g is None:
             st.frames += 1
             st.gates[why] = st.gates.get(why, 0) + 1
             return Bore1Row(int(frame_idx), float(t_frame), clock(), why)
+        if self.gate_log is not None:
+            self.gate_log.row("bore1", t_frame, g)
         im = None
         if getattr(self.head, "needs_frame", True):
             im = frame() if callable(frame) else frame

@@ -15,6 +15,10 @@
   <exec_depend>ament_index_python</exec_depend>
   <!-- Pattern, RsiRing and the image conversion of the ELP readout (ports of the same legacy classes) -->
   <exec_depend>width_readout_elp</exec_depend>
+  <!-- fan / semicircle patterns (T13): the path gate and the gate log -->
+  <exec_depend>path_geometry</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
   <!-- the locked session_meta.json update -->
   <exec_depend>camera_capture</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
@@ -23,6 +27,7 @@
   <!-- head: torch needs torch (CUDA build) and timm from pip (legacy bore1/requirements_bore1.txt); not rosdep keys -->
 
   <test_depend>python3-pytest</test_depend>
+  <test_depend>ros2launch</test_depend>
   <test_depend>python3-yaml</test_depend>
   <test_depend>cl_controller</test_depend>
 

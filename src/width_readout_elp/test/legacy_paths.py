@@ -49,3 +49,32 @@ def import_legacy_ml():
     rsi_ring_ml so that they live next to the single-layer modules of import_legacy()."""
     return (_load("rt_readout_ml", LEGACY_ML_DIR / "rt_readout.py"),
             _load("rsi_ring_ml", LEGACY_ML_DIR / "rsi_ring.py"))
+
+
+CAGE2_DIR = ROOT / "legacy" / "realtime_cl_cage2_semi_261103"
+CAGE2_RIGS = {"A": CAGE2_DIR / "rig" / "cage2opt_elpA" / "rig_cage2opt_elpA_261102_m2.json",
+              "B": CAGE2_DIR / "rig" / "cage2opt_elpB" / "rig_cage2opt_elpB_261102.json"}
+CAGE2_SESSIONS = {"fan1": ROOT / "data" / "fan1cl_20261103_222754", "arc2": ROOT / "data" / "arc2ol_20261103_235936"}
+_CAGE2_NAMES = ("rt_readout", "rsi_ring", "arc_geom", "fan_geom", "semi_geom")
+_cage2 = {}
+
+
+def import_legacy_cage2():
+    """{name: module} of the cage-2 semi folder (rt_readout, rsi_ring, arc_geom, fan_geom, semi_geom). Its module names
+    are those of realtime_cl_261023 (rt_readout, rsi_ring): they are imported with the folder first on sys.path and
+    the other modules of the same names moved aside, then sys.modules is restored. The cage-2 modules keep their own
+    references (the names they bound at import)."""
+    if _cage2:
+        return dict(_cage2)
+    saved = {n: sys.modules.pop(n) for n in _CAGE2_NAMES if n in sys.modules}
+    sys.path.insert(0, str(CAGE2_DIR))
+    try:
+        for n in ("rsi_ring", "fan_geom", "semi_geom"):
+            importlib.import_module(n)
+        _cage2.update({n: sys.modules[n] for n in _CAGE2_NAMES})
+    finally:
+        for n in _CAGE2_NAMES:
+            sys.modules.pop(n, None)
+        sys.modules.update(saved)
+        sys.path.remove(str(CAGE2_DIR))
+    return dict(_cage2)

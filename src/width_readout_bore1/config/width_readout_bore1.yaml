@@ -23,3 +23,6 @@ width_readout_bore1:
     drop_bad_q: true
     sd_max: .inf
     session_meta: ""
+    bore_max_deg: 0.0           # fan / semi patterns: angle cap |delta| in deg (run_cl.py --fan-bore-max-deg default 0)
+    bore_angle_at: tip          # fan / semi patterns: tip (legacy) | obs (s_tip - 5)
+    gate_log_dir: ""            # semi patterns: folder of semi_gate_<camera>.csv (empty = the session_meta folder)
