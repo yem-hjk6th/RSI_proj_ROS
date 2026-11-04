@@ -247,7 +247,12 @@ def walk(p, nn, c0, level, direction, maxd=WALK_MAX):
 def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0) -> np.ndarray:
     """Chroma (R-B)/(R+G+B) of a BGR image on the (d, n) bed grid behind the tip; NaN where the rig is not valid.
     ``dz`` lifts the grid above the bed by the leg's planned layer offset (0.0 = single layer, bit-identical)."""
-    gx, gy = tip[0] + S_GRID, tip[1] + N_GRID
+    return sample_chroma_grid(rig, im, tip, tip[0] + S_GRID, tip[1] + N_GRID, dz)
+
+
+def sample_chroma_grid(rig, im: np.ndarray, tip, gx, gy, dz: float = 0.0) -> np.ndarray:
+    """``sample_chroma`` on a given bed grid gx, gy (len(SS) x len(NN)); the camera pose is the one at the tip. The
+    fan / semicircle readout (``path_readout``) passes the grid that follows the path."""
     uv, z = rig.project(np.stack([gx, gy, rig.bed_z(gx, gy) + dz], -1), rig.Tcw_at(tip))
     ok = rig.valid(uv, z)
     m = cv2.remap(im, uv[..., 0].astype(np.float32), uv[..., 1].astype(np.float32),
@@ -257,8 +262,9 @@ def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0) -> np.ndarray:
     return c
 
 
-def rows_from_chroma(c: np.ndarray) -> np.ndarray:
-    """(13, 7) array: d, w, ctr, con, mdf, core, fin per 1 mm d bin, with the coverage, contrast and walk gates."""
+def rows_from_chroma(c: np.ndarray, mdfb: np.ndarray = MDFB) -> np.ndarray:
+    """(13, 7) array: d, w, ctr, con, mdf, core, fin per 1 mm d bin, with the coverage, contrast and walk gates.
+    ``mdfb``: the MDF reference columns (default both halves of the band, |n| 7.5..10.5)."""
     out = np.full((len(SUB), 7), np.nan)
     for k, b in enumerate(SUB):
         sub = c[BIN_ROWS[k]]
@@ -266,10 +272,10 @@ def rows_from_chroma(c: np.ndarray) -> np.ndarray:
         p = np.nanmedian(np.where(good[None, :] > GOOD_COL, sub, np.nan), axis=0)
         fin = ~np.isnan(p)
         out[k, 0], out[k, 6] = b + 0.5, fin.mean()
-        if fin.mean() < GOOD_BIN or not fin[CORE].any() or not fin[MDFB].any():
+        if fin.mean() < GOOD_BIN or not fin[CORE].any() or not fin[mdfb].any():
             continue
         p = gaussian_filter1d(np.interp(np.arange(len(p)), np.flatnonzero(fin), p[fin]), SIGMA_MM / STEP)
-        mdf, core = float(np.median(p[MDFB])), float(np.median(p[CORE]))
+        mdf, core = float(np.median(p[mdfb])), float(np.median(p[CORE]))
         con = mdf - core
         out[k, 3:6] = con, mdf, core
         if con < GATE:

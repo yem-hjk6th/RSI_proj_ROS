@@ -380,3 +380,18 @@ def find_pattern(name) -> Path:
     if not p.exists():
         raise FileNotFoundError(f"pattern {Path(name).name} not in {patterns_dir()}")
     return p
+
+
+def is_path_pattern(path) -> bool:
+    """True when the pattern json at ``path`` has ``"geometry"`` ``semi`` or ``fan`` (the readouts gate it with
+    ``gates``); every other pattern runs the readouts' straight-leg code."""
+    c = json.loads(Path(path).read_text(encoding="utf-8"))
+    return c.get("geometry") in GEOMETRIES
+
+
+def pattern_path(value) -> Path:
+    """A pattern json given as a path (used as is when the file exists) or by file name (:func:`find_pattern`)."""
+    p = Path(value)
+    if p.is_file():
+        return p
+    return find_pattern(value)

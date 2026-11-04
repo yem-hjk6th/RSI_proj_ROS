@@ -2,6 +2,8 @@
 import ast
 from pathlib import Path
 
+import pytest
+
 PKG = Path(__file__).resolve().parents[1] / "path_geometry"
 ROS = ("rclpy", "ament_index_python", "rosidl", "krc_interfaces", "builtin_interfaces", "std_msgs", "sensor_msgs")
 
@@ -18,8 +20,9 @@ def test_no_ros_imports():
                 assert n.split(".")[0] not in ROS, f"{f.name}: imports {n}"
 
 
-def test_geometry_numpy_only():
-    tree = ast.parse((PKG / "geometry.py").read_text(encoding="utf-8"))
+@pytest.mark.parametrize("name", ["geometry.py", "gates.py"])
+def test_geometry_and_gates_numpy_only(name):
+    tree = ast.parse((PKG / name).read_text(encoding="utf-8"))
     mods = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
     mods |= {n.module.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.level == 0}
-    assert mods <= {"__future__", "csv", "json", "math", "dataclasses", "pathlib", "typing", "numpy"}, mods
+    assert mods <= {"__future__", "csv", "json", "math", "dataclasses", "pathlib", "threading", "typing", "numpy"}, mods

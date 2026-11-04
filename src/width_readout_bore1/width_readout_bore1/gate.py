@@ -12,9 +12,15 @@ extra latency is subtracted, unlike the ELP readout's ``lat``):
 The pose at t is interpolated on the deduplicated RIst track (``width_readout_elp.rsi_ring.RsiRing``, the port of the
 legacy ring) and the pattern is ``width_readout_elp.readout.Pattern`` (the port of ``rt_readout.Pattern``). Pure Python
 and numpy, no ROS imports.
+
+Fan and semicircle patterns (T13): for a pattern json with ``"geometry"`` ``fan`` or ``semi`` (``load_pattern`` gives
+a ``path_geometry`` Pattern then), ``make_gate`` returns ``path_geometry.gates.bore_gate`` for kind ``A`` (the legacy
+``make_fan_bore_gate("A", max_deg)`` / ``make_semi_bore_gate("A", max_deg)``): the A line by projection, motion along
+its local tangent, ``|e| < 0.5``, the same x limits, and the angle cap ``|delta| <= max_deg`` at the tip (or at
+``s_tip - 5`` with ``angle_at="obs"``); one more reason, ``angle``. Every other pattern gets ``bore1_gate`` unchanged.
 """
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
@@ -25,7 +31,7 @@ Z_TOL = 0.5             # mm, |z - z_cmd(x)|
 DIR_DT = 0.1            # s: direction check against the pose this long before the frame
 DIR_DX = -0.3           # mm: x(t) - x(t - DIR_DT) must be below this (moving -X)
 
-GATE_REASONS = ("ok", "stale", "no_track", "z_or_dir", "leg_or_x")
+GATE_REASONS = ("ok", "stale", "no_track", "z_or_dir", "leg_or_x", "angle")
 
 
 @dataclass
@@ -50,3 +56,36 @@ def bore1_gate(pat, ring, t: float) -> Tuple[Optional[B1Gate], str]:
     if dy >= DY_MAX or not (X_LO < tip[0] < X_HI):
         return None, "leg_or_x"
     return B1Gate(tip, leg, pat.x_start - tip[0]), ""
+
+
+def is_path(pat) -> bool:
+    """True for a path_geometry Pattern (fan / semi geometry)."""
+    return getattr(pat, "geometry", None) in ("fan", "semi")
+
+
+def load_pattern(pattern_json, root=None):
+    """The pattern of the ``pattern_json`` parameter (a path or a file name, as ``width_readout_elp.config.
+    resolve_pattern``): a ``path_geometry`` Pattern for a fan / semi json, else ``width_readout_elp.readout.Pattern``.
+    """
+    from path_geometry.geometry import is_path_pattern
+    from path_geometry.geometry import load_pattern as load_path_pattern
+    from width_readout_elp.config import resolve_pattern
+    from width_readout_elp.readout import Pattern
+    p = resolve_pattern(pattern_json)
+    return load_path_pattern(p) if is_path_pattern(p) else Pattern(p, root)
+
+
+def make_gate(pat, max_deg: float = 0.0, angle_at: str = "tip") -> Callable:
+    """gate(pat, ring, t) -> (gate or None, reason) for this pattern: ``bore1_gate`` for a straight-leg pattern;
+    ``path_geometry.gates.bore_gate(pat, ring, t, "A", max_deg, angle_at)`` for a fan / semi pattern."""
+    if not is_path(pat):
+        return bore1_gate
+    from path_geometry.gates import ANGLE_AT, bore_gate
+    if angle_at not in ANGLE_AT:
+        raise ValueError(f"bore_angle_at {angle_at!r}: one of {ANGLE_AT}")
+    max_deg = float(max_deg)
+
+    def gate(p, ring, t):
+        return bore_gate(p, ring, t, "A", max_deg, angle_at)
+
+    return gate

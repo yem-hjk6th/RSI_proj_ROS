@@ -7,6 +7,12 @@ Thin wrapper around ``readout.RtReadout``:
 
 The state and image callbacks run in separate callback groups, so a slow frame never delays the ring. The image
 subscription keeps only the newest frame (depth 1), so the readout never falls behind the camera.
+
+Fan and semicircle patterns (T13): when the pattern json has ``"geometry"`` ``fan`` or ``semi``, the node uses
+``path_readout.PathReadout`` (ELP-A on the A legs: gate by projection on the lines / rows, grid along the path); every
+other pattern runs ``readout.RtReadout`` unchanged. ``pattern_json`` is a path, or a file name in path_geometry's
+``patterns/``. For a semi pattern with ``gate_log_dir`` set, the gate log goes to
+``<gate_log_dir>/semi_gate_<camera>.csv`` (legacy ``semi_gate_<ses>.csv`` columns; one file per camera node).
 """
 import math
 
@@ -19,9 +25,9 @@ from sensor_msgs.msg import Image
 
 from krc_interfaces.msg import KrcState, Width
 
-from .config import default_pattern_json, default_rig_json
+from .config import default_pattern_json, default_rig_json, make_readout
 from .image import image_to_bgr
-from .readout import RtReadout, used_rows
+from .readout import used_rows
 from .rsi_ring import RsiRing
 
 
@@ -42,8 +48,10 @@ class WidthReadoutElp(Node):
         root = p("root", "").value or None
         self.d_min = float(p("d_min", 12.0).value)
         self.use_header_stamp = bool(p("use_header_stamp", True).value)
+        gate_log_dir = p("gate_log_dir", "").value
 
-        self.readout = RtReadout(rig, pattern, root)
+        self.readout, self.gate_log = make_readout(rig, pattern, root, gate_log_dir, self.camera)
+        pattern = str(getattr(self.readout.pat, "path", pattern))
         self.ring = RsiRing()
         self.frame_idx = 0
         self.pub = self.create_publisher(Width, width_topic, 50)
@@ -55,10 +63,19 @@ class WidthReadoutElp(Node):
                                  callback_group=MutuallyExclusiveCallbackGroup())
         self.get_logger().info(f"{self.camera}: {image_topic} + {state_topic} -> {width_topic} (rig {rig})")
         pat = self.readout.pat
-        if pat.ml:
+        if hasattr(pat, "geometry"):
+            self.get_logger().info(
+                f"{pat.geometry} pattern {pat.src} ({pattern}): ELP-{self.readout.kind} on the "
+                f"{self.readout.kind} legs, path gate and grid; gate log "
+                f"{self.gate_log.path if self.gate_log else 'off'}")
+        elif pat.ml:
             self.get_logger().warning(
                 f"multi-layer pattern {pat.src}: {len(pat.leg_ids)} A legs on {len(pat.dz_levels)} planned offsets "
                 f"(0..{float(pat.dz_levels.max()):g} mm); the gate takes the layer's leg, the plane is lifted by it")
+
+    def close(self) -> None:
+        if self.gate_log is not None:
+            self.gate_log.close()
 
     def on_state(self, msg: KrcState) -> None:
         self.ring.push(_sec(msg.stamp), msg.rist[:3])
@@ -104,6 +121,7 @@ def main(args=None):
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        node.close()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

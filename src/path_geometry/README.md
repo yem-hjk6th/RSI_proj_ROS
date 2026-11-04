@@ -1,13 +1,17 @@
 # path_geometry
 
 Task T14 (issue #35). The pattern geometry of the fan and semicircle programs, and the angle failure map tool.
-Plain Python: `geometry.py` uses numpy only; the tool adds pandas (and matplotlib for `--plots`). No ROS imports.
+Task T13 (issue #36): the readout gates of these patterns, the path-following ELP grid and the gate log (`gates.py`),
+used by `width_readout_elp` and `width_readout_bore1`.
+Plain Python: `geometry.py` and `gates.py` use numpy only; the tool adds pandas (and matplotlib for `--plots`). No ROS
+imports.
 
 **Nothing here has run on hardware.** The tool works on logged sessions only (`data/`).
 
 | Module | Ported from (`legacy/realtime_cl_cage2_semi_261103/`) | Content |
 |---|---|---|
 | `geometry.py` | `semi_geom.py` (`Piece`, `PathLine`, `SemiLines`, `SemiPattern`), `fan_geom.py` (`Line`, `FanLines`, `FanPattern`) | `load_pattern(json)`: a `"geometry": "semi"` or `"fan"` pattern and its segs csv (anything else: `ValueError`), with the legacy load-time checks of the segs csv. `Pattern.lines.get(kind, leg)` → a line with `name`, `L`, `project(P) -> (s, e)`, `delta_at`, `curv_at`, `R_at`, `lobe_at`, `t_at`, `n_at`; `Pattern.lines.locate(P, kinds)` |
+| `gates.py` | `fan_geom.py` (`_FanReadoutMixin.gate`, `make_fan_bore_gate`, `frame_rows_dir`), `arc_geom.py` (`_ArcReadoutMixin.gate`, `make_arc_bore_gate`), `semi_geom.py` (`PathLine.grid`, `make_semi_bore_gate`, `_GateLog`), `bore1/bore1_rt.py` (`DY_MAX`, `X_LO`, `X_HI`, `LAB_BACK`) | `elp_gate`, `bore_gate`, `elp_grid`, `mdf_band`, the gate log (below) |
 | `failure_map.py` | `semi_failure_map_261103.py` | The four tables of one session (below) |
 | `cli.py` | – | `angle_failure_map` |
 | `plots.py` | – | One PNG per camera |
@@ -27,6 +31,27 @@ Sign conventions as legacy (legacy README, "Geometry and gates"):
 - straight fan lines: `n` from the segs csv (+Y-ish), `curv` 0, `R` inf, `lobe` 0, `delta` = the line's `delta_deg`.
 - `locate`: the line of the given kinds with the smallest |e| among those with |e| ≤ tol and −tol ≤ s ≤ L + tol
   (`line_tol_mm`, 1 mm).
+
+## Gates (T13)
+
+`elp_gate(pat, ring, t_frame, kind, lat)` and `bore_gate(pat, ring, t, kind, max_deg, angle_at="tip")` return
+`(gate, "")` or `(None, reason)`; `kind` A = ELP-A / bore1, B = ELP-B / bore2. `ring` is anything with `newest_t()` and
+`track_at(tq)` (the legacy `RsiRing`, `width_readout_elp.rsi_ring.RsiRing`). Order of checks, reasons and tolerances
+as legacy (module docstring):
+
+| | ELP (tip at `t_frame - lat`) | bore (tip at `t`) |
+|---|---|---|
+| 1 | `stale`: no packet at or after the tip time | same |
+| 2 | `no_track`: fewer than two distinct poses | same |
+| 3 | `z_or_dir`: `\|z - z_cmd\| > 0.5` or motion along `t(s)` in 0.1 s `< dir_min_mm` | `\|z - z_cmd\| >= 0.5` or `<= 0.3` |
+| 4 | `leg_or_xwin`: no line within `line_tol_mm` or x outside `x_window` | `leg_or_x` (A) / `line_or_x` (B): no line, `\|e\| >= 0.5`, or x outside `770 < x < 945` (A) / `x_window` (B) |
+| 5 | `min_s_tip`: `s < min_s_tip` | `angle`: `\|delta\| > max_deg + 1e-9` at `s_tip` (`angle_at="tip"`) or `s_tip - 5` (`"obs"`) |
+
+`BoreGate` carries `s_dep = s_tip - 5`, the tested `delta` and `s_angle`, and `obs_before_start` (`s_dep < 0`: the
+angle at `s_dep` is the start tangent's, since `delta_at` clamps `s`; 78 passed frames on ARC2-OL, the 78 bore rows
+with `s_dep < 0` of the failure map). `elp_grid(line, tip)`: rows at `s_tip - d` (d 12-25 mm, 0.1 mm) along the line
+(fan) or the row through the lobe joints (semi; before the leg start the start tangent extended), columns at `e_tip + n`
+along the local normal. `GateLog` / `gate_log_row`: the legacy `semi_gate_<ses>.csv` rows (semi patterns only).
 
 ## angle_failure_map
 
@@ -76,7 +101,10 @@ take everything beyond ±90.
 | `test_failure_map_arc2.py` | Acceptance 2–4 on ARC2-OL: bore, ELP-row and ELP-frame tables = the legacy tool's (fixtures); the `obs` bore rows and the `tip_frames` rows of the summary = the legacy summary; the `obs` ELP rows = the groupby written out in the test on the legacy ELP-row table; the legacy summary = the lab's `failuremap_summary_20261103_235936_lab.csv` to its printed precision; the bore `obs_delta` within 0.01 deg of `semi_gate`'s `delta_obs` (3224 frames). The legacy tool is also run live and must still give the fixtures. |
 | `test_failure_map_fan1.py` | Acceptance 5 on FAN1-CL: four tables; every row's `tip_delta` / `obs_delta` = its line's `delta_deg`. Session layouts and options. |
 | `test_plots.py` | Acceptance 6: the four figures of each session, non-empty. |
-| `test_no_ros.py` | No ROS imports; `geometry.py` needs numpy only. |
+| `test_gates_sessions.py` | T13 acceptance 2-4 on both sessions, every logged frame of bore1, bore2, ELP-A, ELP-B: port = legacy offline on the same ring (reason, leg exactly; `s_tip`, `s_dep`, `e` within 1e-9 mm); legacy offline = live (ELP: decision and leg, `s_tip` within 0.001 mm, cuts `t_frame` and `t_done`; bores at the `t_done` cut: reason and leg, `s_tip` within 0.1 mm, every larger difference reproduced by an earlier cut); the gate log = `semi_gate_20261103_235936.csv`; the angle cap for 0-90 deg = legacy with the task file's `angle` counts; `angle_at="obs"`; the 78 frames with `s_dep < 0`. |
+| `test_gates_grid.py` | T13 acceptance 5: the grid of 1000 gated tips per pattern = the legacy grid within 1e-9 mm; MDF bands. |
+| `test_gates_synthetic.py` | Every reason of both kinds and geometries on synthetic tracks, port = legacy; argument checks; the gate log file. |
+| `test_no_ros.py` | No ROS imports; `geometry.py` and `gates.py` need numpy only. |
 
 Fixtures (`test/fixtures/golden_legacy_arc2ol_failuremap_*.csv.gz`, 1.5 MB together) are the legacy tool's four
 tables on ARC2-OL. Regenerate them with `python3 src/path_geometry/test/make_golden.py` from the repository root

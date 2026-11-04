@@ -23,6 +23,12 @@ Head (``head``): ``torch`` (weights from ``weight_dir``, sha256 checked against 
 or ``replay`` (the head outputs of ``replay_csv``, a bore1_rt csv, by frame time). With ``session_meta`` set, the node
 writes a ``bore1_readout`` block into that session_meta.json at start and at stop (head, counts, head time).
 
+Fan and semicircle patterns (T13): a pattern json with ``"geometry"`` ``fan`` or ``semi`` (``pattern_json``: a path,
+or a file name in path_geometry's ``patterns/``) switches to the path gate (``gate.make_gate``) with the angle cap
+``bore_max_deg`` (default 0, as ``run_cl.py --fan-bore-max-deg``) tested at ``bore_angle_at`` (``tip``, legacy, or
+``obs`` = s_tip - 5). Semi patterns also write the gate log ``semi_gate_<camera>.csv`` into ``gate_log_dir`` (empty:
+the folder of ``session_meta``; no log without either). Every other pattern runs the straight-leg gate unchanged.
+
 Lock-step hook (``lockstep``, default false; replay tests only): no wall clock and no waiting. KrcState and Image are
 queued (reliable, keep all); a std_msgs/Float64MultiArray on /width_readout_bore1/step, data = [n_state, n_image],
 pushes the first n_state KrcState received into the ring and then processes the images up to n_image, waiting until
@@ -31,6 +37,7 @@ that many have arrived. The frame time is ``header.stamp + header_offset_s``.
 import math
 import time
 from collections import deque
+from pathlib import Path
 
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -41,8 +48,9 @@ from sensor_msgs.msg import Image
 
 from krc_interfaces.msg import Bore1Record, KrcState, Width
 
+from .gate import is_path, load_pattern
 from .head import HEAD_KINDS, make_head
-from .params import FRAME_TIMES, PARAMS, STEP_TOPIC
+from .params import ANGLE_AT, FRAME_TIMES, PARAMS, STEP_TOPIC
 from .readout import Bore1Readout
 from .record import record_kwargs, sec_ns, sec_of, width_kwargs
 
@@ -66,12 +74,17 @@ class WidthReadoutBore1(Node):
             raise Refused(f"head {p['head']!r}: one of {', '.join(HEAD_KINDS)}")
         if p["frame_time"] not in FRAME_TIMES:
             raise Refused(f"frame_time {p['frame_time']!r}: one of {', '.join(FRAME_TIMES)}")
-        from width_readout_elp.config import default_pattern_json
-        from width_readout_elp.readout import Pattern
+        if p["bore_angle_at"] not in ANGLE_AT:
+            raise Refused(f"bore_angle_at {p['bore_angle_at']!r}: one of {', '.join(ANGLE_AT)}")
         from width_readout_elp.rsi_ring import RsiRing
         self.p = p
         self.camera = p["camera"]
-        pattern = p["pattern_json"] or str(default_pattern_json())
+        try:
+            pat = load_pattern(p["pattern_json"], p["root"] or None)
+        except Exception as e:  # noqa: BLE001 - a missing or broken pattern refuses the start
+            raise Refused(f"pattern_json {p['pattern_json']!r}: {type(e).__name__}: {e}") from e
+        pattern = str(getattr(pat, "path", None) or p["pattern_json"] or "R1v30_CLp (packaged)")
+        self.gate_log = None
         t0 = time.monotonic()
         try:
             self.head = make_head(p["head"], weight_dir=p["weight_dir"], replay_csv=p["replay_csv"],
@@ -79,8 +92,15 @@ class WidthReadoutBore1(Node):
                                   replay_tol_s=float(p["replay_tol_s"]), warmup=int(p["warmup"]))
         except Exception as e:  # noqa: BLE001 - weights, torch / timm, CUDA: any of them refuses the start
             raise Refused(f"bore1 head did not load: {type(e).__name__}: {e}") from e
-        self.readout = Bore1Readout(Pattern(pattern, p["root"] or None), self.head, sd_max=float(p["sd_max"]),
-                                    drop_bad_q=bool(p["drop_bad_q"]))
+        if is_path(pat) and pat.geometry == "semi":
+            d = p["gate_log_dir"] or (str(Path(p["session_meta"]).parent) if p["session_meta"] else "")
+            if d:
+                from path_geometry.gates import GateLog
+                Path(d).mkdir(parents=True, exist_ok=True)
+                self.gate_log = GateLog(Path(d) / f"semi_gate_{self.camera}.csv")
+        self.readout = Bore1Readout(pat, self.head, sd_max=float(p["sd_max"]), drop_bad_q=bool(p["drop_bad_q"]),
+                                    max_deg=float(p["bore_max_deg"]), angle_at=p["bore_angle_at"],
+                                    gate_log=self.gate_log)
         self.ring = RsiRing()
         self.frame_idx = 0
         self.errors = 0
@@ -95,6 +115,11 @@ class WidthReadoutBore1(Node):
             f"{p['head']} ready in {time.monotonic() - t0:.1f} s; frame time "
             f"{'header + %g s' % self.header_offset_s if self.lockstep or p['frame_time'] == 'header' else 'receive'}"
             f"; pattern {pattern}")
+        if is_path(pat):
+            self.get_logger().info(
+                f"{pat.geometry} pattern {pat.src}: path gate on the A legs, angle cap |delta| <= "
+                f"{float(p['bore_max_deg']):g} deg at {p['bore_angle_at']}"
+                f"; gate log {self.gate_log.path if self.gate_log else 'off'}")
         self._write_meta(final=False)
         if self.lockstep:
             self._init_lockstep(keep_all)
@@ -201,6 +226,8 @@ class WidthReadoutBore1(Node):
                          drop_bad_q=bool(p["drop_bad_q"]),
                          sd_max=None if math.isinf(float(p["sd_max"])) else float(p["sd_max"]),
                          summary=self.readout.stats.summary(),
+                         bore_max_deg=float(p["bore_max_deg"]), bore_angle_at=p["bore_angle_at"],
+                         gate_log=str(self.gate_log.path) if getattr(self, "gate_log", None) else None,
                          receive_minus_stamp_ms=self._recv_stats())
             update_meta(path, "bore1_readout", block)
         except Exception as e:  # noqa: BLE001 - the meta file must never stop the readout
@@ -224,6 +251,8 @@ class WidthReadoutBore1(Node):
         else:                                   # after Ctrl+C / launch shutdown: no rosout any more
             print(f"[{self.get_name()}] {msg}", flush=True)
         self._write_meta(final=True)
+        if self.gate_log is not None:
+            self.gate_log.close()
 
 
 def main(args=None):
