@@ -9,7 +9,7 @@ RSI UDP server for the KR C4 (route A in `docs/DESIGN.md`). Ported from `legacy/
 | Module | Role | ROS |
 |---|---|---|
 | `rsi_xml.py` | Packet parser, reply builder (RKorr is a constant zero string) | no |
-| `window.py` | Pattern geometry and print-window state machine | no |
+| `window.py` | Pattern geometry and print-window state machine (wall programs: closes at the last print point only at the planned last Z, `last_z`) | no |
 | `decider.py` | Per-packet OvCmd: outside / forced / step / control / watchdog, ramp, clamp, speed floor | no |
 | `shared.py` | Lock-free shared values and the packet ring (reply loop → ROS) | no |
 | `server.py` | The reply loop in its own process (`spawn`), and its parent-side handle | no |
@@ -44,3 +44,6 @@ python3 -m pytest src/krc_rsi_bridge/test src/krc_sim/test
 
 - `test/fixtures/` holds golden outputs of the legacy reply process. Regenerate them with `test/tools/make_golden.py`; it needs numpy, scipy and OpenCV for the legacy imports.
 - `test_stall_ros.py` needs a sourced ROS 2 workspace. It is skipped otherwise.
+- `test_window_walls.py` (T12): on `krc_sim`'s path of each wall program the window equals `cl_controller`'s on every
+  packet, opens at the first point and closes only at the planned last Z; the bridge sends the controller's value for
+  the whole wall; single-layer patterns have no `last_z`.

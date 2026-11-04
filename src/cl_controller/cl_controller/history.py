@@ -74,11 +74,19 @@ class StateHistory:
         t, P = self.td[i0:self.nd], self.Pd[i0:self.nd]
         return np.stack([np.interp(tq, t, P[:, k]) for k in range(3)], -1)
 
-    def veff_at_s(self, y_leg: float, x_start: float, s, n_pk: int = 2400, tol: float = 1.0):
+    def veff_at_s(self, y_leg: float, x_start: float, s, n_pk: int = 2400, tol: float = 1.0, pass_only: bool = False):
         """v_eff at the moment the tip first reached deposition position s (= x_start - x) on the leg at y_leg, from
-        the last n_pk packets. None if the leg is not in the window."""
+        the last n_pk packets. None if the leg is not in the window.
+
+        pass_only (legacy realtime_cl_261023_ml): a -X pass can start right after the same wall's +X pass one layer
+        lower (same y), so only the packets after the tip was last at or behind x_start - 0.5 are used. As in the
+        legacy _ml pipeline, no caller sets it (RowStore.estimate = the unchanged legacy bore1_rt.RowStore.estimate)."""
         i0 = max(0, self.n - n_pk)
         P, ve = self.P[i0:self.n], self.ve[i0:self.n]
+        if pass_only:
+            back = np.flatnonzero(P[:, 0] >= x_start - 0.5)
+            if len(back):
+                P, ve = P[back[-1]:], ve[back[-1]:]
         m = np.abs(P[:, 1] - y_leg) < tol
         if m.sum() < 2:
             return None

@@ -2,6 +2,11 @@
 
 Ported from ``legacy/realtime_cl_261023/rt_controller.py`` (``PrintWindow``) and the
 geometry part of ``rt_readout.py`` (``Pattern``). Standard library only.
+
+Multi-layer walls (``legacy/realtime_cl_261023_ml``, whose ``rsi_proc.py`` used the ``_ml`` ``PrintWindow``): a wall
+passes its last x / y on every layer, the first time at the end of its first connector. With a segs csv that has a
+``z_off`` column and a pattern json ``last_z``, the window closes only at the planned last Z. Without them (every
+single-layer pattern) nothing changes.
 """
 import csv
 import json
@@ -23,6 +28,7 @@ class PatternGeom:
     x1_z1: Tuple[float, float]
     v100_min_mm_s: Optional[float]   # slowest speed at OvCmd 100 on kind A legs >= 1 (speed floor)
     v100_max_mm_s: Optional[float]
+    last_z: Optional[float] = None   # planned Z of the last print point (walls: z_off column + json last_z)
 
     def z_cmd(self, x: float) -> float:
         (x0, z0), (x1, z1) = self.x0_z0, self.x1_z1
@@ -53,6 +59,7 @@ class PatternGeom:
             x1_z1=tuple(map(float, c["z_cmd"]["x1_z1"])),
             v100_min_mm_s=min(v100) if v100 else None,
             v100_max_mm_s=max(v100) if v100 else None,
+            last_z=float(c["last_z"]) if ("z_off" in rows[0] and c.get("last_z") is not None) else None,
         )
 
 
@@ -77,6 +84,8 @@ class PrintWindow:
                 self.state, self.t_start = "inside", t
         else:
             lx, ly = self.pat.last_pt
-            if abs(x - lx) <= tol and abs(y - ly) <= 1.0:
+            # walls pass the last x / y on every layer: close only at the planned last Z (legacy _ml PrintWindow)
+            onlast = self.pat.last_z is None or self.ignore_z or abs(z - self.pat.last_z) < self.z_tol
+            if abs(x - lx) <= tol and abs(y - ly) <= 1.0 and onlast:
                 self.state, self.t_end = "after", t
         return self.state

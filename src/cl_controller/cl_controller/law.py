@@ -18,6 +18,8 @@ Plans:
   B    A plus forced legs (force_seg {leg: "bore1" | "elp" | "model"})
   Bp   feed-forward + a slow integral (time constant tau_slow)
   Bpp  open loop: u = u0 (+ an optional per-leg speed schedule), everything still estimated and logged
+Sources (LawCfg.sources, legacy realtime_cl_261023_ml): the sources that may steer; the others are dropped from the
+order (still estimated and logged). Walls use "elp": the bore1 head is a layer-1 model.
 
 Gated integral: on an A leg, outside the corner freeze, with a valid estimate from the source in control:
   e = rhat - u;  optional "ack" wait;  |e| <= db -> no change;  else u += clip(gain e, +-rate_max).
@@ -54,6 +56,7 @@ class EstLite:
 class LawCfg:
     plan: str = "A"
     primary: str = ""                 # "" -> from the plan (A, B, Bp, Bpp: elp; A_b1: bore1)
+    sources: str = ""                 # sources that may steer, comma separated; "" = elp and bore1 (walls: "elp")
     target: str = "const"             # const (W* everywhere) | w12 (plateau target, k_ff = 1)
     # feed-forward timing
     ff_lead_s: float = 0.08           # s ahead of the tip (KRC response + half the 50 ms publish period)
@@ -134,6 +137,11 @@ class Law:
         if self.primary not in SRCS:
             raise ValueError(f"primary {self.primary} not in {SRCS}")
         self.order = [self.primary] + [s for s in SRCS if s != self.primary]
+        if cfg.sources:                       # walls: bore1 (a layer-1 model) is estimated and logged but never steers
+            keep = [s.strip() for s in cfg.sources.split(",") if s.strip()]
+            if self.primary not in keep or any(s not in SRCS for s in keep):
+                raise ValueError(f"sources {cfg.sources!r}: must be from {SRCS} and include the primary {self.primary}")
+            self.order = [s for s in self.order if s in keep]
         self.u = (cfg.u0 if cfg.plan == "Bpp" else 0.0) + math.log(cfg.v_start_mm_s / v_ref)
         self.slow, self.n_slow, self.have_slow = 0.0, 0, False
         self.state, self.reason = "model", "start"

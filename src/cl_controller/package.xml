@@ -16,6 +16,10 @@
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-pandas</test_depend>
   <test_depend>python3-yaml</test_depend>
+  <!-- T12 wall tests: krc_sim kinematics and the ELP readout gate in the closed-loop harness (test/walls_sim.py) -->
+  <test_depend>krc_sim</test_depend>
+  <test_depend>width_readout_elp</test_depend>
+  <test_depend>python3-opencv</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

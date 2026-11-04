@@ -43,9 +43,9 @@ run on hardware. **planned** = not in the repository yet.
 |---|---|---|---|---|
 | `krc_interfaces` | ament_cmake | – | Messages (§5) | implemented |
 | `krc_rsi_bridge` | ament_python | `rsi_proc.py`, `rsi_ov_listener.py`, `rsi_ring.py` | RSI UDP server in its own process. Publishes `KrcState` and `ReplyRecord`, subscribes to `OverrideCmd`. Clamps, floor, heartbeat watchdog and fallback ramp live here. | implemented |
-| `krc_sim` | ament_python | `replay_smoke.py`, `harness_run_cl.py` | Fake KR C4 RSI client: 4 ms packets, kinematics along a pattern, obeys the override, counts late replies like the controller. Also replays `rsi_data_*.csv`. | implemented |
-| `cl_controller` | ament_python | `rt_controller.py`, `rt_law_v3.py` | Control law as a pure library, plus a node: `Width` + `KrcState` → `OverrideCmd`; `CtrlRecord` after every update | implemented |
-| `width_readout_elp` | ament_python | `rt_readout.py`, `rig/`, `pattern/` | ELP chroma-edge width readout: image + `KrcState` → `Width` | implemented |
+| `krc_sim` | ament_python | `replay_smoke.py`, `harness_run_cl.py` | Fake KR C4 RSI client: 4 ms packets, kinematics along a pattern (wall programs: every layer, at the planned Z), obeys the override, counts late replies like the controller. Also replays `rsi_data_*.csv`. | implemented |
+| `cl_controller` | ament_python | `rt_controller.py`, `rt_law_v3.py`; walls: `realtime_cl_261023_ml/` | Control law as a pure library, plus a node: `Width` + `KrcState` → `OverrideCmd`; `CtrlRecord` after every update. Wall programs `W4L28_*`: layer-aware legs and window, `control_sources`, the wall stop rule (`sat_stop_s`) | implemented (walls: synthetic tests only) |
+| `width_readout_elp` | ament_python | `rt_readout.py`, `rig/`, `pattern/`; walls: `realtime_cl_261023_ml/rt_readout.py` | ELP chroma-edge width readout: image + `KrcState` → `Width`. Wall programs: the gate takes the layer's leg, the readout plane is lifted by its offset | implemented (walls: synthetic tests only) |
 | `krc_eki_bridge` | ament_python | – | Same topics as the RSI bridge, over EthernetKRL TCP. KRL/XML templates marked NOT RUN. | implemented (templates NOT RUN) |
 | `krc_replay` | ament_python | – | End-to-end replay of a logged session through the ROS graph: `log_player` node (lock-step and real-time), equivalence and safety tests. Also the RSI link latency test (`latency_test` CLI, `latency_bridge.launch.py`). | implemented |
 | `print_session` | ament_python | `run_cl.py` | Session lifecycle: one bringup launch with the start-up checks and refusals of `run_cl.py`, `session_meta.json`, rosbag2 recording (mcap) of the record topics, `bag_to_legacy` export to the legacy CSV logs. Warns at start-up in shadow mode (no OvCmd: 1 % on `RSI_OV4`). | implemented |
@@ -145,6 +145,9 @@ controller:** its reply carries no OvCmd, and the lab's print programs load `RSI
 ## 7. Tests
 
 - **Golden tests** against `legacy/` on `data/e1_20261022_165128/`. The ported law must reproduce the logged override sequence when fed the logged inputs.
+- **Walls** (T12; no wall session is logged): the legacy `realtime_cl_261023_ml` modules and the port closed loop on the
+  same `krc_sim` run of `W4L28_CL` with synthetic widths (gate decisions, legs, layer offsets, override sequence), and
+  the wall stop rule (`cl_controller` `test_walls_*.py`, `width_readout_elp` `test_walls.py`).
 - **Timing tests** on `krc_sim`: reply latency distribution, and late-reply counting with a 100-packet timeout.
 - **Replay** (`krc_replay`): lock-step equivalence of the nodes with the library ports, and the real-time chain on a
   slice of E1, with a heartbeat-loss case.

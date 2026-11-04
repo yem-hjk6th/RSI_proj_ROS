@@ -2,9 +2,16 @@
 
 rt_controller imports rt_readout, which needs cv2 and scipy for its image code only. The controller layer uses just
 rt_readout.Pattern, so stand-ins are installed for those two packages when they are missing.
+
+`ml()` is the multi-layer (walls) variant legacy/realtime_cl_261023_ml: its five modules under the same names as the
+single-layer ones, so they are kept out of sys.modules and swapped in only inside `with ml() as L:` (the legacy code
+imports some of them inside functions). Every other legacy module (bore1_rt, rsi_proc, ...) is shared, as in the lab
+folder.
 """
+import importlib.util
 import sys
 import types
+from contextlib import contextmanager
 
 from e1_data import LEGACY
 
@@ -53,3 +60,31 @@ def run_cl():
     setup()
     import run_cl as m
     return m
+
+
+ML_DIR = LEGACY.parent / "realtime_cl_261023_ml"
+ML_NAMES = ("rt_readout", "rt_law_v3", "rsi_ring", "rt_controller", "run_cl")    # import order
+_ML: dict = {}
+
+
+@contextmanager
+def ml():
+    """Inside: sys.modules maps the five legacy module names to the _ml variants. Yields {name: module}."""
+    setup()
+    saved = {n: sys.modules.get(n) for n in ML_NAMES}
+    try:
+        for n in ML_NAMES:
+            if n not in _ML:
+                spec = importlib.util.spec_from_file_location(n, ML_DIR / f"{n}.py")
+                m = importlib.util.module_from_spec(spec)
+                sys.modules[n] = m
+                spec.loader.exec_module(m)
+                _ML[n] = m
+            sys.modules[n] = _ML[n]
+        yield dict(_ML)
+    finally:
+        for n, m in saved.items():
+            if m is None:
+                sys.modules.pop(n, None)
+            else:
+                sys.modules[n] = m

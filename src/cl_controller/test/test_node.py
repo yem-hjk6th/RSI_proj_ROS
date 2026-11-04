@@ -66,3 +66,21 @@ def test_node_runs_e1_params():
         node.destroy_node()
     finally:
         rclpy.shutdown()
+
+
+def test_node_wall_pattern_by_name():
+    """T12: a wall program's pattern is found by name; only the ELP steers; the wall stop rule is on (2.0 s)."""
+    from rclpy.parameter import Parameter
+
+    from cl_controller.node import ControllerNode
+
+    rclpy.init()
+    try:
+        params = dict(mode="closed", plan="A", pattern="pattern_usr_ELP_W4L28_CL_261023.json", control_sources="elp")
+        node = ControllerNode(parameter_overrides=[Parameter(k, value=v) for k, v in params.items()])
+        c = node.ctrl
+        assert c.pat.ml and c.pat.last_z == 37.3 and len(c.pat.leg_ids) == 56
+        assert c.cfg.sat_s == 2.0 and c.law.order == ["elp"] and c.cfg.ov_default == 40
+        node.destroy_node()
+    finally:
+        rclpy.shutdown()

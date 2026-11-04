@@ -2,6 +2,8 @@
 
 Ported from legacy/realtime_cl_261023: rt_readout.Pattern (geometry, leg lookup, z_cmd, first / last print point) and
 rt_law_v3.plateaus_from_segs / pattern_speed_info / plateaus_at_ov (the -X plateaus used by the feed-forward).
+Multi-layer walls from legacy/realtime_cl_261023_ml/rt_readout.Pattern: a segs csv with a z_off column gives every A
+leg its planned offset above the layer-1 plane; without it (every single-layer pattern) nothing changes.
 
 `Pattern` and the plateau helpers take parsed data; `load_pattern` is the only function that reads files.
 """
@@ -17,33 +19,65 @@ Plateaus = Dict[int, List[Tuple[float, float, float]]]
 
 
 class Pattern:
-    """Pattern json + its segs csv rows (dicts with the csv's string values)."""
+    """Pattern json + its segs csv rows (dicts with the csv's string values).
+
+    Multi-layer (``ml``, a segs csv with a ``z_off`` column): ``leg_dz`` is each A leg's planned offset above the
+    layer-1 plane (the ``z_off`` of its first A segment), ``dz_levels`` the distinct offsets, ``last_z`` (pattern json)
+    the planned Z of the last print point, which gates the window close. ``z_cmd(x, z, y)``, ``leg_at(y, z, x)`` and
+    ``plane_dz(leg)`` are layer-aware; called without z they are the single-layer functions.
+    """
 
     def __init__(self, cfg: dict, segs: Sequence[dict]):
         self.src = cfg["src"]
         self.cfg = cfg
         self.segs = list(segs)
-        ys = {}
+        self.ml = bool(self.segs) and "z_off" in self.segs[0]
+        ys, offs = {}, {}
         for r in self.segs:
             if r["kind"] == "A":
                 ys.setdefault(int(r["leg"]), float(r["y0"]))
+                if self.ml:
+                    offs.setdefault(int(r["leg"]), float(r["z_off"]))
         self.leg_ids = np.array(sorted(ys))
         self.leg_ys = np.array([ys[k] for k in self.leg_ids])
+        self.leg_dz = np.array([offs.get(k, 0.0) for k in self.leg_ids])
         self.first_pt = (float(self.segs[0]["x0"]), float(self.segs[0]["y0"]))
         self.last_pt = (float(self.segs[-1]["x1"]), float(self.segs[-1]["y1"]))
         (self.x0, self.z0), (self.x1, self.z1) = cfg["z_cmd"]["x0_z0"], cfg["z_cmd"]["x1_z1"]
         self.x_start = float(cfg["x_start"])
         self.xwin = cfg["x_window"]
         self.min_s_tip = float(cfg["min_s_tip"])
+        self.last_z = float(cfg["last_z"]) if (self.ml and cfg.get("last_z") is not None) else None
+        self.dz_levels = np.unique(self.leg_dz) if self.ml else np.zeros(1)
 
-    def z_cmd(self, x):
-        return self.z0 + (self.z1 - self.z0) * (x - self.x0) / (self.x1 - self.x0)
+    def z_cmd(self, x, z=None, y=None):
+        """Layer-1 plane at x. Multi-layer with z: plus the planned offset nearest to z - plane; with z and y: plus
+        the offset of the A leg that leg_at(y, z, x) picks, so a pass on another layer of the same wall (same y, the
+        unseen +X passes) is one layer step off and fails the z test."""
+        z1 = self.z0 + (self.z1 - self.z0) * (x - self.x0) / (self.x1 - self.x0)
+        if not self.ml or z is None:
+            return z1
+        if y is not None:
+            return z1 + self.plane_dz(self.leg_at(y, z, x)[0])
+        return z1 + float(self.dz_levels[int(np.argmin(np.abs(self.dz_levels - (z - z1))))])
 
-    def leg_at(self, y: float):
-        """(leg number of the A leg whose y is nearest, |dy|)."""
+    def leg_at(self, y: float, z=None, x=None):
+        """(leg number of the A leg whose y is nearest, |dy|). Multi-layer with z and x: among the legs at that y,
+        the one whose planned offset is nearest to z - z_cmd(x)."""
         dy = np.abs(self.leg_ys - y)
-        i = int(np.argmin(dy))
+        if not self.ml or z is None or x is None:
+            i = int(np.argmin(dy))
+            return int(self.leg_ids[i]), float(dy[i])
+        same = np.flatnonzero(dy <= dy.min() + 1e-6)
+        dz = z - self.z_cmd(x)
+        i = int(same[np.argmin(np.abs(self.leg_dz[same] - dz))])
         return int(self.leg_ids[i]), float(dy[i])
+
+    def plane_dz(self, leg: int) -> float:
+        """Planned Z offset of an A leg above the layer-1 plane (0.0 for a single-layer pattern)."""
+        if not self.ml:
+            return 0.0
+        return float(self.leg_dz[int(np.flatnonzero(self.leg_ids == leg)[0])])
 
     def y_of(self, leg: int) -> float:
         return float(self.leg_ys[int(np.flatnonzero(self.leg_ids == leg)[0])])

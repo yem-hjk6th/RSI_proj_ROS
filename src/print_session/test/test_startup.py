@@ -37,13 +37,15 @@ def test_e1_realtime_block_equals_session_meta():
     rt = json.loads(json.dumps(p.realtime))           # as written to the file
     assert set(rt) == set(meta)                         # mode, cfg, rig, pattern, version, law, order, speed
     assert rt["mode"] == meta["mode"] == "closed"
-    assert rt["cfg"] == meta["cfg"]
+    # E1 ran the single-layer pipeline: no wall stop rule fields (T12; sat_s 0 = off on a single-layer pattern)
+    assert set(rt["cfg"]) - set(meta["cfg"]) == {"sat_s", "sat_min_dz"} and rt["cfg"]["sat_s"] == 0.0
+    assert {k: rt["cfg"][k] for k in meta["cfg"]} == meta["cfg"]
     assert rt["order"] == meta["order"] == ["bore1", "elp"]
     assert rt["speed"] == meta["speed"]
     extra = set(rt["law"]) - set(meta["law"])           # E1 ran realtime_cl_261022: no leg-start fix fields
-    assert extra and all(k.startswith("blind_") for k in extra)
+    assert extra and all(k.startswith("blind_") or k == "sources" for k in extra)   # sources: T12 walls, "" = both
     assert {k: rt["law"][k] for k in meta["law"]} == meta["law"]
-    assert rt["law"]["blind_tau"] == 0.0
+    assert rt["law"]["blind_tau"] == 0.0 and rt["law"]["sources"] == ""
     assert rt["pattern"].endswith(meta["pattern"].replace("\\", "/").split("/")[-1])
     assert rt["rig"].endswith("rig_cage1012.json")
 

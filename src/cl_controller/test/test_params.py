@@ -1,5 +1,8 @@
 """Every run_cl.py argument is a node parameter with the same (effective) default, or is owned by another node; and
-config/e1.yaml rebuilds exactly the configuration session_meta.json says E1 ran with."""
+config/e1.yaml rebuilds exactly the configuration session_meta.json says E1 ran with.
+
+run_cl.py is both the single-layer one (legacy/realtime_cl_261023) and the multi-layer one
+(legacy/realtime_cl_261023_ml), which adds --control-sources and --sat-stop-s (T12)."""
 import dataclasses
 import json
 
@@ -30,27 +33,38 @@ EFFECTIVE_NONE = {
     "blind_ref": legacy_law.LawCfg.blind_ref, "blind_dir": legacy_law.LawCfg.blind_dir,
     "guard_bed": legacy_law.LawCfg.guard_bed, "target_schedule": legacy_law.LawCfg.tgt_schedule,
     "speed_check": legacy_ctrl.CtrlCfg.speed_check, "root": "", "mode": "shadow", "pattern": "",
+    # legacy _ml run_cl.py: None = both sources / the derived wall stop rule
+    "control_sources": "", "sat_stop_s": -1.0,
 }
+ML_ONLY = {"control_sources", "sat_stop_s"}
 
 
-def _legacy_args():
-    ns = run_cl.parse_args(["--mode", "shadow", "--pattern", "x.json"])
+def _legacy_args(ml=False):
+    argv = ["--mode", "shadow", "--pattern", "x.json"]
+    if ml:
+        with legacy_import.ml() as L:
+            ns = L["run_cl"].parse_args(argv)
+    else:
+        ns = run_cl.parse_args(argv)
     return {k: v for k, v in vars(ns).items() if k not in ("mode", "pattern")}, ns
 
 
 def test_every_run_cl_argument_is_covered():
     args, _ = _legacy_args()
-    names = set(args) | {"mode", "pattern"}
+    args_ml, _ = _legacy_args(ml=True)
+    assert set(args_ml) - set(args) == ML_ONLY
+    names = set(args) | set(args_ml) | {"mode", "pattern"}
     missing = names - set(PARAMS) - set(NOT_HERE)
     assert not missing, missing
     assert not (set(PARAMS) & set(NOT_HERE))
     assert set(PARAMS) <= names
 
 
-def test_defaults_match_run_cl():
-    args, _ = _legacy_args()
+@pytest.mark.parametrize("ml", [False, True], ids=["single_layer", "ml"])
+def test_defaults_match_run_cl(ml):
+    args, _ = _legacy_args(ml)
     for name, (default, _) in PARAMS.items():
-        if name in ("mode", "pattern"):
+        if name in ("mode", "pattern") or (name in ML_ONLY and not ml):
             continue
         legacy = args[name]
         want = EFFECTIVE_NONE[name] if legacy is None else legacy
@@ -64,10 +78,16 @@ def test_default_params_give_legacy_cfgs():
     _, ns = _legacy_args()
     ns.mode, ns.plan = "closed", "A"
     llc = run_cl.build_law_cfg(ns)
+    _, ns_ml = _legacy_args(ml=True)
+    ns_ml.mode, ns_ml.plan = "closed", "A"
+    with legacy_import.ml() as L:
+        llc_ml = L["run_cl"].build_law_cfg(ns_ml)
     for f in dataclasses.fields(LawCfg):
         if f.name in ("w_base", "alpha_m", "v_ref_mm_s"):
             continue
-        assert getattr(lc, f.name) == getattr(llc, f.name), f.name
+        assert getattr(lc, f.name) == getattr(llc_ml, f.name), f.name
+        if f.name != "sources":                     # the single-layer LawCfg has no sources field
+            assert getattr(lc, f.name) == getattr(llc, f.name), f.name
 
 
 def test_e1_yaml_reproduces_session_meta():
@@ -77,6 +97,9 @@ def test_e1_yaml_reproduces_session_meta():
     assert p["pattern"] == meta["pattern"].replace("\\", "/").split("/")[-1]
     cfg, lc, _ = build_configs(p, load_pattern(E.PATTERN))
     for f in dataclasses.fields(CtrlCfg):
+        if f.name not in meta["cfg"]:      # E1 ran the single-layer pipeline: no sat_s / sat_min_dz (sat_s 0 = off)
+            assert getattr(cfg, f.name) == f.default and f.name in ("sat_s", "sat_min_dz"), f.name
+            continue
         want = meta["cfg"][f.name]
         got = getattr(cfg, f.name)
         assert (list(got) if isinstance(got, tuple) else got) == want, f.name
