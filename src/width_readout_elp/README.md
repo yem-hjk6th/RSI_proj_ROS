@@ -94,17 +94,25 @@ The ELP readout samples the image bilinearly at the projected bed grid (`sample_
   fixed-point weights, then rounds to uint8.
 - OpenCV 5 interpolates at the full float position and rounds to uint8.
 
-On a random image (60 x 80 px, 3 channels, 200 x 300 map points) the OpenCV 5 result equals round(exact bilinear) for every value, the OpenCV 4
-result equals round(bilinear at the 1/32 px position) for 99.45 % (the rest is the weight rounding), and the two differ
-by up to 6 grey levels in 62 % of the values.
+On a random image (60 x 80 px, 3 channels, 200 x 300 map points) the OpenCV 5 result equals round(exact bilinear) for
+every value, and the two versions differ by up to 6 grey levels in 62 % of the values.
+
+The OpenCV 4 result is the bilinear value at the 1/32 px position, rounded half up. At 1/32 px the four weights are
+exact integers, (32 - a or a) * (32 - b or b) * 32 with a, b in 0..31, and they sum to 2^15, so the weights add no
+rounding. Measured with OpenCV 4.10 on such an image (seed 0, all 180 000 values inside the image):
+
+- OpenCV 4 equals floor(bilinear@1/32 + 0.5) for 100 % of the values.
+- It equals np.rint(bilinear@1/32) for 99.46 %. All 967 differing values (0.54 %) are exact .5 ties, where OpenCV
+  rounds half up and np.rint rounds half to even. Of the 1990 ties (1.11 %), the other 1023 have an even upper
+  neighbour, where both rules agree.
 
 This is the whole cause of the E1 golden drift (`test_golden`, `test_cli`), measured with the opencv-python-headless
 wheels 4.10.0.84 and 5.0.0.93 in two virtual environments (Python 3.12, the committed E1 inputs, the port before
 `remap_linear`):
 
 - The JPEG decode is identical: all 40 frames decode to the same pixels.
-- The port with the OpenCV 5 decode and OpenCV 4's remap gives the OpenCV 4 rows bit for bit. With the OpenCV 4 decode and
-  OpenCV 5's remap it gives the OpenCV 5 rows.
+- The port with the OpenCV 5 decode and OpenCV 4's remap gives the OpenCV 4 rows bit for bit. With the OpenCV 4
+  decode and OpenCV 5's remap it gives the OpenCV 5 rows.
 - All 40 frames are gated in both. The rows, NaN pattern, leg and s_tip are the same. 429 of the 430 finite widths
   move by more than 1e-6 mm. Every frame moves.
 - |w5 - w4|: max 0.0071 mm, mean 0.0011 mm, median 0.0008 mm. The signed mean is -0.0002 mm (sd 0.0014 mm) on widths
@@ -129,10 +137,16 @@ to OpenCV 4's float-map remap, on 4 and 5:
 
 - On OpenCV 4.10 the port's E1 rows are unchanged bit for bit, and every test passes.
 - On OpenCV 5.0 the rows equal the OpenCV 4 rows bit for bit, and `test_golden` and `test_cli` pass.
-- On OpenCV 5.0, nine tests that run the legacy modules live now fail: `test_legacy_live`, `test_walls::test_plane_lift_matches_legacy_ml`,
-  and `test_read_equals_legacy_on_synthetic_images` in `test_path_readout` (4) and `test_elp_b` (3). These legacy
-  modules call `cv2.remap` on float maps, so on OpenCV 5 they no longer give what the legacy gave when it ran.
-- So CI keeps OpenCV below 5 (`windows-pytest`; build-test uses Ubuntu's 4.6). No golden tolerance was changed.
+- On OpenCV 5.0, nine tests that run the legacy modules live now fail: `test_legacy_live`,
+  `test_walls::test_plane_lift_matches_legacy_ml`, and `test_read_equals_legacy_on_synthetic_images` in
+  `test_path_readout` (4) and `test_elp_b` (3). These legacy modules call `cv2.remap` on float maps, so on OpenCV 5
+  they no longer give what the legacy gave when it ran.
+- So the main CI jobs keep OpenCV below 5 (`windows-pytest`; build-test uses Ubuntu's 4.6). No golden tolerance was
+  changed.
+- The CI job `elp-opencv5` runs this package's tests, `test_remap.py`, `test_golden.py` and `test_cli.py` among them,
+  on a pinned OpenCV 5 wheel, with those nine legacy-live tests deselected by id. On OpenCV 4 `test_remap.py` cannot
+  tell `remap_linear` from the float-map `cv2.remap`, since both give the same result there. On OpenCV 5 it fails if
+  `remap_linear` is reverted, and so do `test_golden` and `test_cli`.
 
 ## ELP-B (cage 2, T15)
 
