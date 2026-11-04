@@ -1,0 +1,27 @@
+{
+ "_comment": "realtime_cl_cage2_semi_261103 (laptop 11-03): ARC2 semicircle meander; legs = rows (A 1 A0_lead, A 2 A19, A 3 A13; B 1 B19, B 2 B13, B 3 B0_end), one segs row per piece (shape line / arc, s0_mm along the leg; arcs cx, cy, R, phi0_deg, phi1_deg, sweep); v_mm_s = speed at OvCmd ov_ref 40, v100_mm_s at 100; src usr_ELP_ARC2_OL_261103.src (print LIN points = usr_ELP_ARC2_261103_chords.csv, checked by make_arc2_261103.py)",
+ "geometry": "semi",
+ "src": "usr_ELP_ARC2_OL_261103",
+ "segs": "usr_ELP_ARC2_261103_segs.csv",
+ "z_cmd": {
+  "x0_z0": [
+   600.0,
+   0.8
+  ],
+  "x1_z1": [
+   970.0,
+   2.3
+  ]
+ },
+ "x_start": 945.0,
+ "x_window": [
+  765.0,
+  950.0
+ ],
+ "min_s_tip": 9.0,
+ "ov_ref": 40.0,
+ "v_max_mm_s": 30.0,
+ "line_tol_mm": 1.0,
+ "dir_min_mm": 0.3,
+ "ov_outside_required": 40
+}

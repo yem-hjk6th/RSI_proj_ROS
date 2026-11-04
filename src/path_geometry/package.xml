@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>path_geometry</name>
+  <version>0.1.0</version>
+  <description>Pattern geometry of the fan (FAN1) and semicircle (ARC2) programs (port of the legacy fan_geom / semi_geom classes; numpy only, no ROS), and the angle_failure_map tool: the angle failure map of bore1, bore2, ELP-A and ELP-B from the logs of one print.</description>
+  <maintainer email="183082151+yem-hjk6th@users.noreply.github.com">yem-hjk6th</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>python3-numpy</exec_depend>
+  <!-- angle_failure_map only: the tables (pandas) and the figures of plots.py (matplotlib, imported for the plots option) -->
+  <exec_depend>python3-pandas</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-matplotlib</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
