@@ -13,17 +13,25 @@ PREVIEW_WIDTH = 640
 
 class Decimator:
     """Lets a frame through when its time enters a new period of ``1 / hz`` (on the frame's own clock): exactly
-    ``hz`` frames per second on average for any input rate above ``hz``, none dropped below it."""
+    ``hz`` frames per second on average for any input rate above ``hz``, none dropped below it.
 
-    def __init__(self, hz: float = PREVIEW_HZ):
+    ``anchored``: the very first frame, which can sit anywhere inside its period, is not let through; passes start at
+    the first period boundary. Every pass is then the first frame of its period, so two passes are never closer than
+    one period minus one frame interval (the camera node's previews)."""
+
+    def __init__(self, hz: float = PREVIEW_HZ, anchored: bool = False):
         if hz <= 0:
             raise ValueError("preview rate must be > 0")
         self.period = 1.0 / float(hz)
+        self.anchored = bool(anchored)
         self.last_slot: Optional[int] = None
         self.passed = 0
 
     def take(self, t: float) -> bool:
         slot = math.floor(t / self.period)
+        if self.last_slot is None and self.anchored:
+            self.last_slot = slot               # the first, partial period: wait for its end
+            return False
         if self.last_slot is not None and slot <= self.last_slot:
             return False
         self.last_slot = slot

@@ -34,7 +34,7 @@ Start-up, as `run_cl.py` / `ElpCam`:
 | Topic | Type | |
 |---|---|---|
 | `/<name>/image_raw` | `sensor_msgs/Image` `bgr8`, best effort, depth 1 | Every frame while the publisher keeps up. `header.stamp` = capture time on the clock of `KrcState.stamp`. Built only while someone subscribes. |
-| `/<name>/preview` | `sensor_msgs/Image` `bgr8`, reliable, depth 1 | Decimated to `preview_hz` (5 Hz) by capture time, downscaled to `preview_width` (640). |
+| `/<name>/preview` | `sensor_msgs/Image` `bgr8`, reliable, depth 1 | Decimated to `preview_hz` (5 Hz) by capture time: the first frame of each period, from the first period boundary after the start. Downscaled to `preview_width` (640). |
 
 **Threads.** The capture thread reads, stamps and hands each frame to the recorder queue without waiting (a full
 queue drops the frame and counts it, as `ElpCam`). The writer thread writes the files and the CSV. A publisher thread
