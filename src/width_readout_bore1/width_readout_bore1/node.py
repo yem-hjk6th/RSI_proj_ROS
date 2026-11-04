@@ -102,11 +102,15 @@ class WidthReadoutBore1(Node):
         except Exception as e:  # noqa: BLE001 - weights, torch / timm, CUDA: any of them refuses the start
             raise Refused(f"{self.camera} head did not load: {type(e).__name__}: {e}") from e
         if is_path(pat) and pat.geometry == "semi":
-            d = p["gate_log_dir"] or (str(Path(p["session_meta"]).parent) if p["session_meta"] else "")
+            from width_readout_elp.config import gate_log_folder
+            d = gate_log_folder(p["gate_log_dir"], p["session_meta"])     # the ELP readout's rule
             if d:
                 from path_geometry.gates import GateLog
-                Path(d).mkdir(parents=True, exist_ok=True)
-                self.gate_log = GateLog(Path(d) / f"semi_gate_{self.camera}.csv")
+                try:
+                    Path(d).mkdir(parents=True, exist_ok=True)
+                    self.gate_log = GateLog(Path(d) / f"semi_gate_{self.camera}.csv")
+                except (OSError, ValueError) as e:  # an existing gate log with another header (as the ELP node)
+                    raise Refused(f"gate log: {e}") from e
         try:
             self.readout = Bore1Readout(pat, self.head, sd_max=float(p["sd_max"]), drop_bad_q=bool(p["drop_bad_q"]),
                                         max_deg=float(p["bore_max_deg"]), angle_at=p["bore_angle_at"],

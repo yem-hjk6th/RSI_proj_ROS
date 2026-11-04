@@ -10,6 +10,7 @@
 import copy
 import json
 import math
+from pathlib import Path, PurePosixPath
 
 import pytest
 import yaml
@@ -49,6 +50,12 @@ def _plan(mode="closed", image_topic="/elp/image_raw", **over):
     return plan(_params(**over), mode, image_topic, search=[CL_PATTERNS])
 
 
+def _ends_with(path, tail: str) -> bool:
+    """`path` ends with the components of `tail` (written with "/"), on any operating system's separator."""
+    parts = PurePosixPath(tail).parts
+    return Path(path).parts[-len(parts):] == parts
+
+
 pytestmark = pytest.mark.skipif(not (BDUO / "raw_video").is_dir(), reason="bduo session data not present")
 
 
@@ -71,10 +78,10 @@ def test_plan_reproduces_the_session_realtime_block():
 
 def test_plan_starts_the_cage2_nodes():
     p = _plan()
-    assert p.readout["rig_json"].endswith("cage2opt_elpA/rig_cage2opt_elpA_261102_m2.json")
+    assert _ends_with(p.readout["rig_json"], "cage2opt_elpA/rig_cage2opt_elpA_261102_m2.json")
     assert p.readout_b == dict(kind="B", camera="elp_b", width_topic="/width/elp_b", pattern_json=str(p.pattern),
                                rig_json=p.readout_b["rig_json"], image_topic="/elp_b/image_raw", b_mdf_side="pos")
-    assert p.readout_b["rig_json"].endswith("cage2opt_elpB/rig_cage2opt_elpB_261102.json")
+    assert _ends_with(p.readout_b["rig_json"], "cage2opt_elpB/rig_cage2opt_elpB_261102.json")
     assert p.bore1 == dict(pattern_json=str(p.pattern), sd_max=0.05, w_offset=0.0) and p.needs_bore1
     assert p.bore2 == dict(pattern_json=str(p.pattern), camera="bore2", width_topic="/width/bore2",
                            record_topic="/width/bore2/record", image_topic="/bore2/image_raw", sd_max=0.05,

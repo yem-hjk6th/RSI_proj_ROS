@@ -8,6 +8,13 @@
 
 Nothing here can delay a reply: callbacks only write shared values or read the packet ring. Both topics are filled
 from the ring, after the reply process has sent the reply.
+
+The publishers keep ``ring_capacity`` messages (reliable, keep last). Each timer callback publishes every packet that
+arrived since the previous one, back to back: normally 2-3, but after a stall of the ROS process (e.g. CPU load) up to
+the whole ring. With a history of 100 (before), a batch of more than 100 overwrote samples the middleware had not yet
+delivered to every reader, so a reader of /krc/state (five readers in a session) could miss packets that the recorder
+of /krc/reply_record (one reader) still got (CI run of PR #45: 2476 states, 2500 replies). The largest batch is logged
+when the node stops.
 """
 import math
 
@@ -61,8 +68,11 @@ class RsiBridgeNode(Node):
         if geom.last_z is not None:
             self.get_logger().warning(f"multi-layer pattern {geom.src}: the print window closes at the last print "
                                       f"point only at the planned last Z {geom.last_z:g} mm")
-        self.pub = self.create_publisher(KrcState, "/krc/state", 100)
-        self.pub_reply = self.create_publisher(ReplyRecord, "/krc/reply_record", 100)
+        depth = max(100, int(p["ring_capacity"]))     # one history slot per ring slot: a batch never overwrites
+        self.pub = self.create_publisher(KrcState, "/krc/state", depth)
+        self.pub_reply = self.create_publisher(ReplyRecord, "/krc/reply_record", depth)
+        self.n_published = 0
+        self.max_batch = 0
         self.ov_sent = p["mode"] in ("closed", "step")
         self.sub = self.create_subscription(OverrideCmd, "/krc/override_cmd", self.on_override, 10)
         self._last_seq = None
@@ -88,7 +98,10 @@ class RsiBridgeNode(Node):
 
     # ---------------------------------------------------------------- reply process -> ROS
     def publish_state(self) -> None:
-        for s in self.server.read_packets():
+        batch = self.server.read_packets()
+        self.n_published += len(batch)
+        self.max_batch = max(self.max_batch, len(batch))
+        for s in batch:
             v, ve = self.speed.push(s[F["t_perf"]], s[F["ipoc"]], (s[F["x"]], s[F["y"]], s[F["z"]]))
             m = KrcState()
             m.stamp = _stamp(s[F["t_wall"]])
@@ -106,6 +119,8 @@ class RsiBridgeNode(Node):
             self.pub_reply.publish(r)
 
     def destroy_node(self):
+        self.get_logger().info(f"published {self.n_published} packets on /krc/state and /krc/reply_record; largest "
+                               f"batch {self.max_batch}; ring dropped {self.server.dropped}")
         self.server.stop()
         return super().destroy_node()
 

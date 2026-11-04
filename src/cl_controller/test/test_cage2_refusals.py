@@ -151,6 +151,26 @@ def test_refused_control_sources_without_a_source_run_cl_591(given):
         _build(control_sources=given, elp_b="off", bore2="off")
 
 
+@pytest.mark.parametrize("given", ["  ", "\t"])
+def test_refused_control_sources_whitespace_only_run_cl_589(given):
+    """run_cl.py 589 tests the raw --control-sources string, so a value of whitespace only is given, leaves no source
+    and exits (590-592). It must not be read as "not given" (elp and bore1 both steering). PR #45 review."""
+    with pytest.raises(Refused, match="control_sources"):
+        _build(control_sources=given)
+    with pytest.raises(Refused, match="control_sources"):
+        _build(control_sources=given, elp_b="off", bore2="off")
+
+
+def test_control_sources_absent_is_no_restriction():
+    """An absent control_sources (the default "") keeps the behaviour before the PR #45 follow-up: no restriction."""
+    p = _p()
+    p.pop("control_sources", None)
+    _, lc, _ = build_configs(p, load_pattern(B.PATTERN))
+    assert defaults()["control_sources"] == "" and lc.sources == ""
+    _, lc, _ = _build(control_sources="", elp_b="off", bore2="off")
+    assert lc.sources == ""
+
+
 def test_refused_sources_without_primary_run_cl_594():
     with pytest.raises(Refused, match="control_sources"):
         _build(control_sources="elp")                                  # plan A_b1: primary bore1

@@ -166,7 +166,8 @@ controller:** its reply carries no OvCmd, and the lab's print programs load `RSI
 - **Replay** (`krc_replay`): lock-step equivalence of the nodes with the library ports, and the real-time chain on a
   slice of E1, with a heartbeat-loss case.
 - **Latency test** (`krc_replay`): `krc_sim` against a bridge on another host; on loopback in CI.
-- **CI:** colcon build and test in a `ros:jazzy` container on every push.
+- **CI:** colcon build and test in a `ros:jazzy` container on every push, and pytest of every `ament_python` package on
+  `windows-latest` without ROS (the lab laptop's operating system; the tests that need rclpy or the messages skip).
 - **ROS domains of the tests.** `colcon test` runs the packages in parallel, and their node tests use the same topics
   (`/krc/state`, `/krc/override_cmd`, `/width/*`, `/elp/*`). Each package's `test/conftest.py` therefore puts its tests
   on a domain of its own before any `rclpy.init()`, from a block of ten IDs (`<base> + pid % 10`; `<PACKAGE>_ROS_DOMAIN_ID`

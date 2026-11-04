@@ -261,3 +261,30 @@ def test_torch_head_without_weights_is_refused(tmp_path):
                 WidthReadoutBore1(parameter_overrides=over)
     finally:
         rclpy.shutdown()
+
+
+def test_gate_log_with_another_header_is_refused(tmp_path):
+    """PR #44 review, follow-up 3: an existing semi_gate_<camera>.csv with another header is a start refusal (Refused,
+    exit 2), as in the ELP node, not a ValueError traceback."""
+    pytest.importorskip("path_geometry")
+    from width_readout_bore1.node import Refused, WidthReadoutBore1, main
+    from width_readout_bore1.readout import B1_COLS
+
+    log = tmp_path / "bore1_rt_x.csv"
+    log.write_text(",".join(B1_COLS) + "\n", encoding="utf-8")
+    gates = tmp_path / "gates"
+    gates.mkdir()
+    (gates / "semi_gate_bore1.csv").write_text("not,the,gate,log,header\n", encoding="utf-8")
+    over = {"head": "replay", "replay_csv": str(log), "pattern_json": "pattern_usr_ELP_ARC2_261103.json",
+            "gate_log_dir": str(gates)}
+    rclpy.init()
+    try:
+        with pytest.raises(Refused, match="another header"):
+            WidthReadoutBore1(parameter_overrides=[Parameter(k, value=v) for k, v in over.items()])
+    finally:
+        rclpy.shutdown()
+    args = ["--ros-args"] + [a for k, v in over.items() for a in ("-p", f"{k}:={v}")]
+    with pytest.raises(SystemExit) as exc:
+        main(args=args)
+    assert exc.value.code == 2
+    assert (gates / "semi_gate_bore1.csv").read_text(encoding="utf-8") == "not,the,gate,log,header\n"

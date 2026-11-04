@@ -150,7 +150,7 @@ Images are not recorded.
 
 ## Exporter (`bag_to_legacy`)
 
-It writes `roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv`, `raw_video/<ses>/bore1_rt_<ses>.csv` when the bag has bore1 records, and copies `session_meta.json` to `raw_video/<ses>/`. Column names and order come from:
+It writes `roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv`, `raw_video/<ses>/bore1_rt_<ses>.csv` when the bag has bore1 records, and copies `session_meta.json` to `raw_video/<ses>/`. The readouts' gate logs `semi_gate_<camera>.csv` (semi patterns; written next to `session_meta.json`, or `--gate-log-dir`) are copied to `raw_video/<ses>/` with `t` converted to the clock of the exported `t_frame` (stamp minus the median `KrcState.stamp - ReplyRecord.pc_ts_perf`), so `angle_failure_map --session <out>` joins them with the bore rows. Column names and order come from:
 - the E1 files (`rsi_data`, `ov_cmd`);
 - `CTRL_COLS`, `READOUT_COLS` and `ROWS_COLS` of `run_cl.py`;
 - `B1_COLS` of `bore1/bore1_rt.py`.
@@ -185,6 +185,7 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`, `Bor
 | `test_cameras.py` | The `cameras` file plan and its refusals; the example camera files keep the legacy profiles. |
 | `test_startup.py` | `session_meta` realtime block equal to E1's; speed block equal to the legacy `speed_rules`; the refusals; the shadow-mode warning (shadow only); the bore1 readout plan and its refusals. |
 | `test_export_unit.py` | Exporter formats and joins on hand-made messages. |
+| `test_gate_log_export.py` | The gate logs in the session flow (PR #44 review): bringup session folder, the readouts' gate logs next to `session_meta.json`, export, `angle_failure_map`'s gate log check joins every gated bore1 frame. |
 
 The tests run on a ROS domain of their own (1–19, set in `test/conftest.py`; `PRINT_SESSION_ROS_DOMAIN_ID` overrides
 it): the bringup tests publish `/krc/state` through the bridge, which other packages' node tests running in parallel
