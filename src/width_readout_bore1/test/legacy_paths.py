@@ -87,3 +87,39 @@ def import_legacy_head():
     no_grad = (lambda: (lambda f: f))
     with _stand_ins({"torch": dict(no_grad=no_grad)}):
         return importlib.import_module("bore1_head")
+
+
+CAGE2_DIR = ROOT / "legacy" / "realtime_cl_cage2_semi_261103"
+BDUO_SES = "20261103_195120"
+BDUO = ROOT / "data" / f"bduo_{BDUO_SES}"
+_CAGE2_NAMES = ("rt_readout", "rsi_ring", "bore1_rt", "bore2_rt", "bore1_head")
+_cage2 = {}
+
+
+def import_legacy_cage2():
+    """{name: module} of the cage-2 folder: rt_readout, rsi_ring, bore1/bore1_rt, bore1/bore2_rt (with bore1_head of
+    realtime_cl_261023/bore1, torch replaced by a stand-in when missing). The names are those of the 261023 modules:
+    they are imported with the cage-2 folders first on sys.path and the others moved aside, then sys.modules is
+    restored (the cage-2 modules keep the references they bound at import)."""
+    if _cage2:
+        return dict(_cage2)
+    saved = {n: sys.modules.pop(n) for n in _CAGE2_NAMES if n in sys.modules}
+    paths = [str(CAGE2_DIR / "bore1"), str(CAGE2_DIR), str(BORE1_DIR)]
+    sys.path[:0] = paths
+    stubs = {"cv2": dict(INTER_LINEAR=1, IMREAD_GRAYSCALE=0)}
+    if not (_have("scipy.ndimage") and _have("scipy.spatial.transform")):
+        stubs.update({"scipy": {}, "scipy.ndimage": dict(gaussian_filter1d=None), "scipy.spatial": {},
+                      "scipy.spatial.transform": dict(Rotation=None)})
+    stubs["torch"] = dict(no_grad=(lambda: (lambda f: f)))
+    try:
+        with _stand_ins(stubs):
+            for n in ("rt_readout", "rsi_ring", "bore1_rt", "bore2_rt"):
+                importlib.import_module(n)
+        _cage2.update({n: sys.modules[n] for n in _CAGE2_NAMES})
+    finally:
+        for n in _CAGE2_NAMES:
+            sys.modules.pop(n, None)
+        sys.modules.update(saved)
+        for p in paths:
+            sys.path.remove(p)
+    return dict(_cage2)

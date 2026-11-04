@@ -11,7 +11,9 @@ width_readout_bore1:
     root: ""
     head: torch                 # torch | replay
     weight_dir: <BORE1_WEIGHT_DIR>
-    quality_json: ""            # empty = the packaged copy of the legacy quality_limits.json
+    quality_json: ""            # empty = the packaged copy of the legacy quality_limits.json (E1 head only)
+    weights: ""                 # e1 (default for bore1) | cage2 (the cage-2 fine-tuned head: needs quality_json)
+    w_offset: 0.0               # mm added to every published width (run_cl --bore1-offset-mm), |x| <= 0.30
     device: cuda
     mem_frac: 0.0
     warmup: 5

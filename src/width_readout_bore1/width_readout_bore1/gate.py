@@ -18,6 +18,11 @@ a ``path_geometry`` Pattern then), ``make_gate`` returns ``path_geometry.gates.b
 ``make_fan_bore_gate("A", max_deg)`` / ``make_semi_bore_gate("A", max_deg)``): the A line by projection, motion along
 its local tangent, ``|e| < 0.5``, the same x limits, and the angle cap ``|delta| <= max_deg`` at the tip (or at
 ``s_tip - 5`` with ``angle_at="obs"``); one more reason, ``angle``. Every other pattern gets ``bore1_gate`` unchanged.
+
+bore2 (cage 2, T15; ``bore2_gate`` of ``legacy/realtime_cl_cage2_semi_261103/bore1/bore2_rt.py`` 55-69): the mirror for
+the +X lines. Frame time, no latency; ``z_or_dir`` (``|z - z_cmd(x)| >= 0.5`` or ``x(t) - x(t - 0.1) <= 0.3``, i.e. not
+moving +X); ``line_or_x`` (no B line, ``|y - line y| >= 0.5``, or x outside the pattern's ``x_window``, inclusive);
+``s_tip = x - b_x0[leg]``, ``s_dep = s_tip - 5``. Fan / semi patterns: the path gate of kind ``B``.
 """
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
@@ -31,7 +36,9 @@ Z_TOL = 0.5             # mm, |z - z_cmd(x)|
 DIR_DT = 0.1            # s: direction check against the pose this long before the frame
 DIR_DX = -0.3           # mm: x(t) - x(t - DIR_DT) must be below this (moving -X)
 
-GATE_REASONS = ("ok", "stale", "no_track", "z_or_dir", "leg_or_x", "angle")
+GATE_REASONS = ("ok", "stale", "no_track", "z_or_dir", "leg_or_x", "line_or_x", "angle")
+CAMERAS = {"bore1": "A", "bore2": "B"}         # camera -> the kind of line it reads
+DIR_DX_B = 0.3          # mm: bore2, x(t) - x(t - DIR_DT) must be above this (moving +X)
 
 
 @dataclass
@@ -58,6 +65,24 @@ def bore1_gate(pat, ring, t: float) -> Tuple[Optional[B1Gate], str]:
     return B1Gate(tip, leg, pat.x_start - tip[0]), ""
 
 
+def bore2_gate(pat, ring, t: float) -> Tuple[Optional[B1Gate], str]:
+    """(B1Gate of the B line, "") or (None, reason): the bore2 gate (module docstring). ``pat`` needs B lines
+    (``b_line_at``, ``b_x0``)."""
+    tn = ring.newest_t()
+    if tn is None or tn < t:
+        return None, "stale"
+    tr = ring.track_at(np.array([t, t - DIR_DT]))
+    if tr is None:
+        return None, "no_track"
+    tip, back = tr[0], tr[1]
+    if abs(tip[2] - pat.z_cmd(tip[0])) >= Z_TOL or tip[0] - back[0] <= DIR_DX_B:
+        return None, "z_or_dir"
+    leg, dy = pat.b_line_at(tip[1])
+    if leg < 0 or dy >= DY_MAX or not (pat.xwin[0] <= tip[0] <= pat.xwin[1]):
+        return None, "line_or_x"
+    return B1Gate(tip, leg, float(tip[0] - pat.b_x0[leg])), ""
+
+
 def is_path(pat) -> bool:
     """True for a path_geometry Pattern (fan / semi geometry)."""
     return getattr(pat, "geometry", None) in ("fan", "semi")
@@ -75,17 +100,23 @@ def load_pattern(pattern_json, root=None):
     return load_path_pattern(p) if is_path_pattern(p) else Pattern(p, root)
 
 
-def make_gate(pat, max_deg: float = 0.0, angle_at: str = "tip") -> Callable:
-    """gate(pat, ring, t) -> (gate or None, reason) for this pattern: ``bore1_gate`` for a straight-leg pattern;
-    ``path_geometry.gates.bore_gate(pat, ring, t, "A", max_deg, angle_at)`` for a fan / semi pattern."""
+def make_gate(pat, max_deg: float = 0.0, angle_at: str = "tip", camera: str = "bore1") -> Callable:
+    """gate(pat, ring, t) -> (gate or None, reason) for this pattern and camera: ``bore1_gate`` / ``bore2_gate`` for a
+    straight-leg pattern; ``path_geometry.gates.bore_gate(pat, ring, t, kind, max_deg, angle_at)`` for a fan / semi
+    pattern (kind A for bore1, B for bore2)."""
+    if camera not in CAMERAS:
+        raise ValueError(f"camera {camera!r}: one of {', '.join(CAMERAS)}")
+    kind = CAMERAS[camera]
     if not is_path(pat):
-        return bore1_gate
+        if kind == "B" and not len(getattr(pat, "b_ids", ())):
+            raise ValueError(f"camera bore2: pattern {getattr(pat, 'src', '')} has no kind-B (+X) lines")
+        return bore1_gate if kind == "A" else bore2_gate
     from path_geometry.gates import ANGLE_AT, bore_gate
     if angle_at not in ANGLE_AT:
         raise ValueError(f"bore_angle_at {angle_at!r}: one of {ANGLE_AT}")
     max_deg = float(max_deg)
 
     def gate(p, ring, t):
-        return bore_gate(p, ring, t, "A", max_deg, angle_at)
+        return bore_gate(p, ring, t, kind, max_deg, angle_at)
 
     return gate

@@ -29,6 +29,10 @@ or a file name in path_geometry's ``patterns/``) switches to the path gate (``ga
 ``obs`` = s_tip - 5). Semi patterns also write the gate log ``semi_gate_<camera>.csv`` into ``gate_log_dir`` (empty:
 the folder of ``session_meta``; no log without either). Every other pattern runs the straight-leg gate unchanged.
 
+bore2 (cage 2, T15): ``camera: bore2`` runs the bore2 gate (+X lines) and the bore2 crop; ``weights`` selects the sha256
+list (``e1`` | ``cage2``), ``w_offset`` is added to the published widths, and ``params.check`` refuses the parameter
+sets the legacy run_cl.py refused. The session_meta block is ``<camera>_readout``.
+
 Lock-step hook (``lockstep``, default false; replay tests only): no wall clock and no waiting. KrcState and Image are
 queued (reliable, keep all); a std_msgs/Float64MultiArray on /width_readout_bore1/step, data = [n_state, n_image],
 pushes the first n_state KrcState received into the ring and then processes the images up to n_image, waiting until
@@ -50,7 +54,7 @@ from krc_interfaces.msg import Bore1Record, KrcState, Width
 
 from .gate import is_path, load_pattern
 from .head import HEAD_KINDS, make_head
-from .params import ANGLE_AT, FRAME_TIMES, PARAMS, STEP_TOPIC
+from .params import ANGLE_AT, FRAME_TIMES, PARAMS, STEP_TOPIC, check
 from .readout import Bore1Readout
 from .record import record_kwargs, sec_ns, sec_of, width_kwargs
 
@@ -76,6 +80,10 @@ class WidthReadoutBore1(Node):
             raise Refused(f"frame_time {p['frame_time']!r}: one of {', '.join(FRAME_TIMES)}")
         if p["bore_angle_at"] not in ANGLE_AT:
             raise Refused(f"bore_angle_at {p['bore_angle_at']!r}: one of {', '.join(ANGLE_AT)}")
+        try:
+            check(p)
+        except ValueError as e:
+            raise Refused(str(e)) from e
         from width_readout_elp.rsi_ring import RsiRing
         self.p = p
         self.camera = p["camera"]
@@ -89,18 +97,22 @@ class WidthReadoutBore1(Node):
         try:
             self.head = make_head(p["head"], weight_dir=p["weight_dir"], replay_csv=p["replay_csv"],
                                   quality_json=p["quality_json"], device=p["device"], mem_frac=float(p["mem_frac"]),
-                                  replay_tol_s=float(p["replay_tol_s"]), warmup=int(p["warmup"]))
+                                  replay_tol_s=float(p["replay_tol_s"]), warmup=int(p["warmup"]),
+                                  camera=self.camera, weights=p["weights"])
         except Exception as e:  # noqa: BLE001 - weights, torch / timm, CUDA: any of them refuses the start
-            raise Refused(f"bore1 head did not load: {type(e).__name__}: {e}") from e
+            raise Refused(f"{self.camera} head did not load: {type(e).__name__}: {e}") from e
         if is_path(pat) and pat.geometry == "semi":
             d = p["gate_log_dir"] or (str(Path(p["session_meta"]).parent) if p["session_meta"] else "")
             if d:
                 from path_geometry.gates import GateLog
                 Path(d).mkdir(parents=True, exist_ok=True)
                 self.gate_log = GateLog(Path(d) / f"semi_gate_{self.camera}.csv")
-        self.readout = Bore1Readout(pat, self.head, sd_max=float(p["sd_max"]), drop_bad_q=bool(p["drop_bad_q"]),
-                                    max_deg=float(p["bore_max_deg"]), angle_at=p["bore_angle_at"],
-                                    gate_log=self.gate_log)
+        try:
+            self.readout = Bore1Readout(pat, self.head, sd_max=float(p["sd_max"]), drop_bad_q=bool(p["drop_bad_q"]),
+                                        max_deg=float(p["bore_max_deg"]), angle_at=p["bore_angle_at"],
+                                        gate_log=self.gate_log, camera=self.camera, w_offset=float(p["w_offset"]))
+        except ValueError as e:                 # bore2 on a pattern without B lines
+            raise Refused(str(e)) from e
         self.ring = RsiRing()
         self.frame_idx = 0
         self.errors = 0
@@ -163,7 +175,7 @@ class WidthReadoutBore1(Node):
             self.errors += 1
             self.readout.stats.frames += 1
             self.readout.stats.errors += 1
-            self.get_logger().error(f"bore1 frame {self.frame_idx} failed (errors {self.errors}): {e!r}",
+            self.get_logger().error(f"{self.camera} frame {self.frame_idx} failed (errors {self.errors}): {e!r}",
                                     throttle_duration_sec=5.0)
             return
         stamp = _time(t)
@@ -228,8 +240,10 @@ class WidthReadoutBore1(Node):
                          summary=self.readout.stats.summary(),
                          bore_max_deg=float(p["bore_max_deg"]), bore_angle_at=p["bore_angle_at"],
                          gate_log=str(self.gate_log.path) if getattr(self, "gate_log", None) else None,
-                         receive_minus_stamp_ms=self._recv_stats())
-            update_meta(path, "bore1_readout", block)
+                         receive_minus_stamp_ms=self._recv_stats(), camera=self.camera,
+                         weights=p["weights"] or None, w_offset=float(p["w_offset"]),
+                         quality_json=p["quality_json"] or None)
+            update_meta(path, f"{self.camera}_readout", block)
         except Exception as e:  # noqa: BLE001 - the meta file must never stop the readout
             self.get_logger().error(f"session_meta not written: {e!r}")
 

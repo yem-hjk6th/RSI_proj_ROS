@@ -15,6 +15,13 @@ the nearest planned layer and that layer's leg at the tip's y, and the readout p
 (``Gate.dz``). Without the column (every single-layer pattern), or when ``z_cmd`` / ``leg_at`` are called without z,
 the single-layer code path runs unchanged.
 
+ELP-B (cage 2, T15; ``legacy/realtime_cl_cage2_semi_261103/rt_readout.py``): ``RtReadoutB`` reads the +X lines (segs
+rows of kind B with x1 > x0; each carries the number of the A leg printed before it). Gate: the tip at t - lat on
+z_cmd, moving +X (x(t - lat) - x(t - lat - 0.1) >= 0.3 mm), the nearest B line within 1 mm, x inside x_window,
+s_tip = x - the line's first x >= min_s_tip. The grid lies behind the tip on the +X side (x = tip - d), and the MDF
+reference uses one half of the band (``MDF_BANDS``; default ``pos``: the A leg printed 9 mm before the B line lies in
+the -n half). Kind A (``RtReadout``) is unchanged.
+
 Differences from legacy: no SciPy (the Gaussian filter and the Euler rotation are written in numpy with the same
 definitions), and ``frame_rows`` is split into ``sample_chroma`` and ``rows_from_chroma``. Pure Python, numpy and
 OpenCV; no ROS imports.
@@ -50,6 +57,8 @@ S_GRID, N_GRID = np.meshgrid(SS, NN, indexing="ij")
 BIN_ROWS = [(SS >= b) & (SS < b + 1) for b in SUB]
 ROW_COLS = ("d", "s_dep", "w", "ctr", "con", "mdf", "core", "fin")
 LEGACY_ROW_COLS = ("frame", "d", "s_dep", "w")
+# halves of the MDF reference band (ELP-B: "pos", see the module docstring)
+MDF_BANDS = {"both": MDFB, "pos": (NN >= 7.5) & (NN <= 10.5), "neg": (NN <= -7.5) & (NN >= -10.5)}
 
 
 def resolve(p, base: Path, root=None) -> Path:
@@ -197,6 +206,27 @@ class Pattern:
         self.min_s_tip = float(c["min_s_tip"])
         self.last_z = float(c["last_z"]) if (self.ml and c.get("last_z") is not None) else None
         self.dz_levels = np.unique(self.leg_dz) if self.ml else np.zeros(1)
+        bys, bx0, bx1 = {}, {}, {}
+        for r in segs:
+            if r["kind"] == "B" and float(r["x1"]) > float(r["x0"]):
+                k = int(r["leg"])
+                bys.setdefault(k, float(r["y0"]))
+                bx0.setdefault(k, float(r["x0"]))
+                bx1[k] = float(r["x1"])
+        self.b_ids = np.array(sorted(bys), dtype=int)
+        self.b_ys = np.array([bys[k] for k in self.b_ids])
+        self.b_x0, self.b_x1 = bx0, bx1
+
+    def b_line_at(self, y: float):
+        """(leg number of the B line whose y is nearest, |dy|); (-1, inf) without B lines."""
+        if not len(self.b_ids):
+            return -1, float("inf")
+        dy = np.abs(self.b_ys - y)
+        i = int(np.argmin(dy))
+        return int(self.b_ids[i]), float(dy[i])
+
+    def b_y_of(self, leg: int) -> float:
+        return float(self.b_ys[int(np.flatnonzero(self.b_ids == leg)[0])])
 
     def z_cmd(self, x, z=None, y=None):
         """Layer-1 plane at x. Multi-layer with z: plus the planned offset nearest to z - plane; with z and y: plus
@@ -244,10 +274,12 @@ def walk(p, nn, c0, level, direction, maxd=WALK_MAX):
     return np.nan
 
 
-def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0) -> np.ndarray:
+def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0, back: int = +1) -> np.ndarray:
     """Chroma (R-B)/(R+G+B) of a BGR image on the (d, n) bed grid behind the tip; NaN where the rig is not valid.
-    ``dz`` lifts the grid above the bed by the leg's planned layer offset (0.0 = single layer, bit-identical)."""
-    return sample_chroma_grid(rig, im, tip, tip[0] + S_GRID, tip[1] + N_GRID, dz)
+    ``dz`` lifts the grid above the bed by the leg's planned layer offset (0.0 = single layer, bit-identical).
+    ``back``: +1 = grid at x = tip + d (behind the nozzle on a -X leg); -1 = x = tip - d (a +X line, ELP-B)."""
+    gx = (tip[0] + S_GRID) if back > 0 else (tip[0] - S_GRID)
+    return sample_chroma_grid(rig, im, tip, gx, tip[1] + N_GRID, dz)
 
 
 def sample_chroma_grid(rig, im: np.ndarray, tip, gx, gy, dz: float = 0.0) -> np.ndarray:
@@ -308,6 +340,7 @@ class Readout:
     tip: np.ndarray
     rows: np.ndarray    # (n, 8) columns ROW_COLS; s_dep = s_tip - d >= 0.5
     compute_s: float
+    kind: str = "A"     # "A" (-X leg, ELP-A) | "B" (+X line, ELP-B; leg and s_tip of the B line)
 
 
 class RtReadout:
@@ -354,6 +387,53 @@ class RtReadout:
     def __call__(self, im, t_frame: float, ring, frame_idx: int = -1) -> Optional[Readout]:
         g = self.gate(t_frame, ring)
         return None if g is None else self.read(im, g, t_frame, frame_idx)
+
+
+class RtReadoutB(RtReadout):
+    """ELP-B on the +X lines (module docstring). ``mdf_side``: the MDF reference half (``MDF_BANDS``)."""
+
+    kind = "B"
+
+    def __init__(self, rig_json, pattern_json, root=None, mdf_side: str = "pos"):
+        super().__init__(rig_json, pattern_json, root)
+        if not len(self.pat.b_ids):
+            raise ValueError(f"{pattern_json}: no kind-B (+X) lines in the segs csv")
+        if mdf_side not in MDF_BANDS:
+            raise ValueError(f"mdf_side {mdf_side} not in {list(MDF_BANDS)}")
+        self.mdf_side, self.mdfb = mdf_side, MDF_BANDS[mdf_side]
+
+    def gate(self, t_frame: float, ring) -> Optional[Gate]:
+        lat = self.rig.lat
+        tn = ring.newest_t()
+        if tn is None or tn < t_frame - lat:
+            self.last_skip = "stale"
+            return None
+        tr = ring.track_at(np.array([t_frame - lat, t_frame - lat - 0.1]))
+        if tr is None:
+            self.last_skip = "no_track"
+            return None
+        tip, back = tr[0], tr[1]
+        pat = self.pat
+        if abs(tip[2] - pat.z_cmd(tip[0])) > 0.5 or tip[0] - back[0] < 0.3:
+            self.last_skip = "z_or_dir"
+            return None
+        leg, dy = pat.b_line_at(tip[1])
+        if dy > 1.0 or not (pat.xwin[0] <= tip[0] <= pat.xwin[1]):
+            self.last_skip = "leg_or_xwin"
+            return None
+        s_tip = tip[0] - pat.b_x0[leg]
+        if s_tip < pat.min_s_tip:
+            self.last_skip = "min_s_tip"
+            return None
+        return Gate(tip, leg, s_tip)
+
+    def read(self, im: np.ndarray, g: Gate, t_frame: float, frame_idx: int) -> Optional[Readout]:
+        t0 = time.perf_counter()
+        r = rows_from_chroma(sample_chroma(self.rig, im, g.tip, 0.0, -1), self.mdfb)
+        s_dep = g.s_tip - r[:, 0]
+        keep = s_dep >= 0.5
+        rows = np.column_stack([r[:, 0], s_dep, r[:, 1:]])[keep]
+        return Readout(frame_idx, t_frame, g.leg, g.s_tip, g.tip, rows, time.perf_counter() - t0, "B")
 
 
 def used_rows(rows: np.ndarray, d_min: float = 12.0) -> np.ndarray:

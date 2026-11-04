@@ -78,3 +78,6 @@ def import_legacy_cage2():
         sys.modules.update(saved)
         sys.path.remove(str(CAGE2_DIR))
     return dict(_cage2)
+
+BDUO_SES = "20261103_195120"
+BDUO = ROOT / "data" / f"bduo_{BDUO_SES}"          # cage 2, CLp4, ELP-B on, bore2 primary (T15)

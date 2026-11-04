@@ -13,6 +13,13 @@ Fan and semicircle patterns (T13): when the pattern json has ``"geometry"`` ``fa
 other pattern runs ``readout.RtReadout`` unchanged. ``pattern_json`` is a path, or a file name in path_geometry's
 ``patterns/``. For a semi pattern with ``gate_log_dir`` set, the gate log goes to
 ``<gate_log_dir>/semi_gate_<camera>.csv`` (legacy ``semi_gate_<ses>.csv`` columns; one file per camera node).
+
+ELP-B (cage 2, T15): ``kind: B`` reads the +X lines with ``readout.RtReadoutB`` (MDF band half ``b_mdf_side``, default
+``pos``). Its rig defaults to the packaged ELP-B rig (``config.ROLE_RIGS``; rigs are bound to the camera role). Run it
+as a second node of this package (name ``width_readout_elp_b``) with its own topics: ``camera: elp_b``,
+``image_topic: /elp_b/image_raw``, ``width_topic: /width/elp_b``. Refused: kind B on ``/width/elp`` or kind A on
+``/width/elp_b`` (the controller would read the rows as the other camera's), a rig named for the other role, and kind B
+on a pattern without B lines.
 """
 import math
 
@@ -25,7 +32,7 @@ from sensor_msgs.msg import Image
 
 from krc_interfaces.msg import KrcState, Width
 
-from .config import default_pattern_json, default_rig_json, make_readout
+from .config import MDF_SIDES, check_rig_role, default_pattern_json, make_readout, rig_for
 from .image import image_to_bgr
 from .readout import used_rows
 from .rsi_ring import RsiRing
@@ -35,22 +42,53 @@ def _sec(stamp) -> float:
     return stamp.sec + 1e-9 * stamp.nanosec
 
 
+class Refused(RuntimeError):
+    pass
+
+
+WIDTH_OF_KIND = {"A": "/width/elp", "B": "/width/elp_b"}
+
+
+def check_params(kind: str, width_topic: str, rig: str, mdf_side: str) -> None:
+    """Refusals of the parameter set (no ROS): see the module docstring."""
+    if kind not in WIDTH_OF_KIND:
+        raise Refused(f"kind {kind!r}: A | B")
+    if mdf_side not in MDF_SIDES:
+        raise Refused(f"b_mdf_side {mdf_side!r}: one of {', '.join(MDF_SIDES)}")
+    other = WIDTH_OF_KIND["B" if kind == "A" else "A"]
+    if width_topic == other:
+        raise Refused(f"kind {kind} publishing on {other}: that topic carries the other ELP's rows")
+    try:
+        check_rig_role(kind, rig)
+    except ValueError as e:
+        raise Refused(str(e)) from e
+
+
 class WidthReadoutElp(Node):
-    def __init__(self):
-        super().__init__("width_readout_elp")
+    def __init__(self, node_name="width_readout_elp"):
+        super().__init__(node_name)
         p = self.declare_parameter
+        self.kind = p("kind", "A").value
         self.camera = p("camera", "elp").value
         image_topic = p("image_topic", "/elp/image_raw").value
         state_topic = p("state_topic", "/krc/state").value
         width_topic = p("width_topic", "/width/elp").value
-        rig = p("rig_json", "").value or str(default_rig_json())
+        mdf_side = p("b_mdf_side", "pos").value
+        if self.kind not in WIDTH_OF_KIND:
+            raise Refused(f"kind {self.kind!r}: A | B")
+        rig = str(rig_for(self.kind, p("rig_json", "").value))
+        check_params(self.kind, width_topic, rig, mdf_side)
         pattern = p("pattern_json", "").value or str(default_pattern_json())
         root = p("root", "").value or None
         self.d_min = float(p("d_min", 12.0).value)
         self.use_header_stamp = bool(p("use_header_stamp", True).value)
         gate_log_dir = p("gate_log_dir", "").value
 
-        self.readout, self.gate_log = make_readout(rig, pattern, root, gate_log_dir, self.camera)
+        try:
+            self.readout, self.gate_log = make_readout(rig, pattern, root, gate_log_dir, self.camera, self.kind,
+                                                       mdf_side)
+        except ValueError as e:                 # e.g. kind B on a pattern without B lines (legacy run_cl.py 1296)
+            raise Refused(str(e)) from e
         pattern = str(getattr(self.readout.pat, "path", pattern))
         self.ring = RsiRing()
         self.frame_idx = 0
@@ -61,7 +99,8 @@ class WidthReadoutElp(Node):
                                  callback_group=MutuallyExclusiveCallbackGroup())
         self.create_subscription(Image, image_topic, self.on_image, image_qos,
                                  callback_group=MutuallyExclusiveCallbackGroup())
-        self.get_logger().info(f"{self.camera}: {image_topic} + {state_topic} -> {width_topic} (rig {rig})")
+        self.get_logger().info(f"{self.camera} (ELP-{self.kind}): {image_topic} + {state_topic} -> {width_topic} "
+                               f"(rig {rig}" + (f", MDF band {mdf_side})" if self.kind == "B" else ")"))
         pat = self.readout.pat
         if hasattr(pat, "geometry"):
             self.get_logger().info(
@@ -113,7 +152,13 @@ class WidthReadoutElp(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WidthReadoutElp()
+    try:
+        node = WidthReadoutElp()
+    except Refused as e:
+        print(f"width_readout_elp refused to start: {e}")
+        if rclpy.ok():
+            rclpy.shutdown()
+        raise SystemExit(2)
     ex = MultiThreadedExecutor(num_threads=2)
     ex.add_node(node)
     try:

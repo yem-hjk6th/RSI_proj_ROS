@@ -16,6 +16,10 @@ committed in this package (a copy of the legacy ``weights/weights_sha256.json``)
 there is one, must be that same list. A missing file or a mismatch refuses (``WeightError``); there is no switch to
 skip it. The legacy checked only against the list next to the weights.
 
+bore2 (cage 2, T15; ``legacy/realtime_cl_cage2_semi_261103/bore1/bore2_rt.py`` 24-45): the same head with the bore2
+crop x 544-1120, y 0-576 and a horizontal flip before the resize (``crop288(frame, "bore2")``); its weights are checked
+against the packaged bore2 sha256 list (``config.sha_json_for``).
+
 No ROS imports. numpy and OpenCV (crop and quality terms).
 """
 import csv
@@ -29,9 +33,11 @@ from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
-from .config import default_quality_json, default_sha_json
+from .config import default_quality_json, default_sha_json, sha_json_for
 
 CROP = (160, 736, 0, 576)       # x0, x1, y0, y1 on the full-res 1280 x 720 frame (legacy line B build_dataset.CROP)
+CROP2 = (544, 1120, 0, 576)     # bore2 (legacy bore2_rt.CROP2), then a horizontal flip
+CROPS = {"bore1": CROP, "bore2": CROP2}
 SIZE = 288
 SEEDS = (0, 1, 2)
 Q_KEYS = ("bright", "sat", "sharp", "diff")
@@ -61,7 +67,7 @@ def _upper(d: dict) -> Dict[str, str]:
 def verify_weights(weight_dir, sha_json=None, seeds: Sequence[int] = SEEDS) -> List[Path]:
     """Paths of the seed weights in ``weight_dir``, each checked against the committed sha256 list; else WeightError."""
     if not str(weight_dir or ""):
-        raise WeightError("bore1 head: weight_dir is empty (the folder with cnxt_t_deploy_s0.pt .. s2.pt)")
+        raise WeightError("bore head: weight_dir is empty (the folder with cnxt_t_deploy_s0.pt .. s2.pt)")
     wd = Path(weight_dir)
     if not wd.is_dir():
         raise WeightError(f"bore1 head: weight_dir {wd} is not a directory")
@@ -84,12 +90,14 @@ def verify_weights(weight_dir, sha_json=None, seeds: Sequence[int] = SEEDS) -> L
     return paths
 
 
-def crop288(frame_bgr: np.ndarray) -> np.ndarray:
-    """uint8 288 x 288 x 3 RGB crop exactly as the training crops (legacy crop288)."""
+def crop288(frame_bgr: np.ndarray, camera: str = "bore1") -> np.ndarray:
+    """uint8 288 x 288 x 3 RGB crop exactly as the training crops (legacy crop288; bore2: crop288_b2, flipped)."""
     import cv2
-    x0, x1, y0, y1 = CROP
-    return cv2.cvtColor(cv2.resize(frame_bgr[y0:y1, x0:x1], (SIZE, SIZE), interpolation=cv2.INTER_AREA),
-                        cv2.COLOR_BGR2RGB)
+    x0, x1, y0, y1 = CROPS[camera]
+    c = cv2.resize(frame_bgr[y0:y1, x0:x1], (SIZE, SIZE), interpolation=cv2.INTER_AREA)
+    if camera == "bore2":
+        c = cv2.flip(c, 1)
+    return cv2.cvtColor(c, cv2.COLOR_BGR2RGB)
 
 
 @dataclass
@@ -207,17 +215,20 @@ class ReplayHead:
 
 
 def make_head(kind: str, weight_dir: str = "", replay_csv: str = "", quality_json: str = "", device: str = "cuda",
-              mem_frac: float = 0.0, replay_tol_s: float = 1e-6, warmup: int = 5):
-    """The head named by ``kind`` (torch | replay), ready to use (the torch head is warmed up)."""
+              mem_frac: float = 0.0, replay_tol_s: float = 1e-6, warmup: int = 5, camera: str = "bore1",
+              weights: str = ""):
+    """The head named by ``kind`` (torch | replay), ready to use (the torch head is warmed up). ``camera`` picks the
+    crop, ``weights`` (with the camera) the sha256 list (``config.sha_json_for``)."""
     if kind == "replay":
         if not replay_csv:
             raise ValueError("head replay needs replay_csv (a bore1_rt_<ses>.csv(.gz))")
         return ReplayHead(replay_csv, replay_tol_s)
     if kind == "torch":
-        paths = verify_weights(weight_dir)              # before torch is imported: a refusal needs no GPU
+        sha = sha_json_for(camera, weights)
+        paths = verify_weights(weight_dir, sha)         # before torch is imported: a refusal needs no GPU
         from .torch_head import TorchHead
         h = TorchHead(weight_dir, device=device, mem_frac=mem_frac or None,
-                      quality=QualityGate.load(quality_json or None), verified=paths)
+                      quality=QualityGate.load(quality_json or None), verified=paths, camera=camera)
         h.warmup(warmup)
         return h
     raise ValueError(f"head {kind!r}: one of {', '.join(HEAD_KINDS)}")

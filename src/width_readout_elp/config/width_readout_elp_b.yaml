@@ -1,0 +1,17 @@
+# Example parameters for the ELP-B readout (cage 2, T15): a second node of this package, kind B, reading the +X lines.
+# Empty rig_json = the packaged ELP-B rig (rig/cage2opt_elpB; rigs are bound to the camera role, not to a USB id).
+# Its latency lat_s 0.057 is the ELP-A value: the ELP-B latency was not measured (a lab check).
+width_readout_elp_b:
+  ros__parameters:
+    kind: B
+    camera: elp_b
+    image_topic: /elp_b/image_raw
+    state_topic: /krc/state
+    width_topic: /width/elp_b
+    rig_json: ""
+    pattern_json: ""
+    root: ""
+    d_min: 12.0
+    use_header_stamp: true
+    b_mdf_side: pos
+    gate_log_dir: ""
