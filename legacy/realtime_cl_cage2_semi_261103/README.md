@@ -78,7 +78,60 @@ differ from the ones quoted in the lab notes.
 3. `fan_geom.py` and `arc_geom.py` keep the pre-semi code paths for the `fan` and `arc` geometries; `semi` reuses
    `arc_geom`'s bore gate and controller with `semi_geom`'s lines.
 
+## Cage 2 (T15): the second ELP, bore2 and the bore-led closed loop
+
+Added 2026-11-04 for task T15: `run_cl.py`, `rt_controller.py`, `rt_law_v3.py` (it differs from `../realtime_cl_261023_ml/`
+only in comments), `rsi_ring.py`, `rig/cage2opt_elpA/`, `rig/cage2opt_elpB/`, and `bore_weights/` (the quality limits,
+the bore2 crop and the sha256 lists, no `.pt`). The session `data/bduo_20261103_195120/` ran the lab copy
+`realtime_cl_cage2_bore_261103`. Its modules are byte-identical to these apart from `run_cl.py`; this `run_cl.py` adds
+the fan / arc / semi switches, and all of them are off for a pattern without `"geometry"`. Line numbers below refer to
+the files here.
+
+- **ELP-B** (`rt_readout.py`):
+  - `Pattern` builds the B lines from the segs rows of kind B with x1 > x0 (154–164); `b_line_at(y)` (166–172).
+  - `RtReadoutB` (299–310) refuses a pattern without B lines. Its gate (312–335): `stale` / `no_track` at t − lat;
+    `z_or_dir` (|z − z_cmd| > 0.5 or +X motion < 0.3 mm in 0.1 s); `leg_or_xwin` (dy > 1.0 or x outside
+    `x_window`); `min_s_tip`.
+  - The grid sits behind the tip on the +X side (`frame_rows(back=-1)`, 202). The MDF band side comes from
+    `--b-mdf-side`, default `pos` (`run_cl.py` 464): the A leg printed just before lies at n = −9.
+  - Logs `readoutB_` / `readoutB_rows_` with the ELP-A columns.
+  - The ELP-B rig's `lat_s` 0.057 is the ELP-A value: the ELP-B latency was not measured.
+- **bore2** (`bore1/bore2_rt.py`):
+  - `Bore2Head` = the bore1 head with crop (544, 1120, 0, 576) and a horizontal flip (24–45). The bore1 crop is
+    (160, 736, 0, 576).
+  - `bore2_gate` (55–69): frame time, no latency; `z_or_dir`; `line_or_x` (leg < 0, dy ≥ 0.5, or x outside the
+    pattern's `x_window`, inclusive). `s_dep` = s_tip − 5.
+  - `Bore2Thread` (72–142) writes `bore2_rt_` with the bore1 columns. `w_offset` (added to the pushed width only) and
+    `exit_reason` are new in both bores (`bore1_rt.py` 289–293, 333, 351–359).
+  - `--bore2`: `off` = no head; `shadow` = head, thread and csv, but the controller ignores the rows; `fallback` /
+    `primary` = law B uses them.
+- **Controller** (`rt_controller.py`):
+  - New `CtrlCfg` fields (91–102): `elp_b`, `b_from_leg` (1), `dir_win_s` (0.1), `dir_vmin` (2.0), `bore2`,
+    `bore_s_use`.
+  - With `elp_b` on, `_update_ab` (409–411, 509–580) runs. `_where2` (447–468) takes the direction from vx over
+    `dir_win_s`. `_slot` (470–489): an A leg ≥ 1 moving −X goes to law A; a B line ≥ `b_from_leg` moving +X goes to
+    law B; anything else holds u. u is carried across each handover (530–532, 551–553).
+  - Law A on −X with plan A_b1 and sources `elp,bore1`: bore1 → ELP-A → model.
+  - Law B on +X (226–233): primary = the bore slot (bore2), sources fixed to `elp,bore1`, G4 on, `blind_tau` 0, so
+    bore2 → ELP-B → model. Law B does not read `--control-sources`.
+  - `RowStoreB` (105–139) uses `veff_at_s(x_sign=+1)` (`rsi_ring.py` 82–93).
+  - The ctrl csv gains `law, kind, dir, vx, src_active, src_why` (`run_cl.py` 229–231). On law-B rows the `*_elp`
+    columns are ELP-B and the `*_b1` columns are bore2. The switch log is `switch_<ses>.csv` (`SWITCH_COLS` 236;
+    labels elpA, bore1, model_A, elpB, bore2, model_B, hold, outside).
+- **Start refusals** (`run_cl.py`):
+  - no `--elp-b` (1154); `--elp-b on` without the ELP-B stream (1158) or without `elp` in the sources (1212);
+  - a pattern without B lines (1296–1298);
+  - `--bore2` not off without `--bore2-quality` (1125); `--bore2 fallback|primary` without ELP-B (1196), without a
+    finite `--bore-sd-max` (1198), or without a loaded head (1365);
+  - `--bore1-weights` without `--bore1-quality` (1120);
+  - a width offset > 0.30 mm (1127); `bore_s_use` not 0 or 6–15 (1130); `b_from_leg` < 1 (1202);
+  - sources without the primary (594).
+- **Program**: `../krc_config/krl/usr_ELP_R1v30_CLp4_261103.src` = the CLp program with the purge shortened from 7
+  to 4 s. The pattern is `src/cl_controller/patterns/pattern_usr_ELP_R1v30_CLp_261022.json` (same segs).
+- Device ids: the rig comments carry USB instance ids. They depend on the USB port; on 2026-11-03 the same id was
+  ELP-A in the lab notes and ELP-B in a rig comment. Bind rigs by role.
+
 ## Not included
 
-`run_cl.py` of this copy, the cage-2 ELP rigs (intrinsics and hand-eye), the bore weights, the videos, the ARC1 files,
-and the pattern generator. The ELP widths in `data/` were computed live in the lab.
+The videos, the bore weights (`.pt`), the ARC1 files and the pattern generator. The widths in `data/` were computed
+live in the lab.

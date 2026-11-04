@@ -1,0 +1,252 @@
+{
+  "session": "20261103_195120",
+  "plan": "A_b1",
+  "order": [
+    "bore1",
+    "elp"
+  ],
+  "judged_source": "bore1",
+  "W_star": 5.25,
+  "pattern": "pattern\\pattern_usr_ELP_R1v30_CLp_261022.json",
+  "controlled_by": {
+    "planned": "bore1",
+    "share_len": {
+      "elp": 0.0,
+      "bore1": 1.0
+    },
+    "judged": "bore1"
+  },
+  "bins": {
+    "elp": 2950,
+    "bore1": 2515
+  },
+  "drop_legs": [],
+  "leg_mean_rhat": {
+    "1": 0.471,
+    "2": 0.465,
+    "3": 0.453,
+    "4": 0.442,
+    "5": 0.395,
+    "6": 0.384,
+    "7": 0.383,
+    "8": 0.303,
+    "9": 0.285,
+    "10": 0.174
+  },
+  "target_schedule": {
+    "schedule": "const",
+    "n_bins_transient_excluded": 0,
+    "leg_mean_W_t": {
+      "1": [
+        5.25
+      ],
+      "2": [
+        5.25
+      ],
+      "3": [
+        5.25
+      ],
+      "4": [
+        5.25
+      ],
+      "5": [
+        5.25
+      ],
+      "6": [
+        5.25
+      ],
+      "7": [
+        5.25
+      ],
+      "8": [
+        5.25
+      ],
+      "9": [
+        5.25
+      ],
+      "10": [
+        5.25
+      ]
+    }
+  },
+  "within_sd": 0.03383643488811452,
+  "leg_sd": 0.015565462956033484,
+  "b_u": -0.409623723638968,
+  "within_sd_openloop_veff": 0.025244443167439533,
+  "within_sd_openloop_hypo_u": 0.031546094119836755,
+  "mean_res": 0.006892894891670446,
+  "leg_mean_res": {
+    "1": 0.0456,
+    "2": 0.0,
+    "3": 0.0068,
+    "4": 0.0116,
+    "5": 0.0034,
+    "6": 0.0098,
+    "7": 0.0055,
+    "8": -0.0023,
+    "9": 0.0097,
+    "10": -0.0155
+  },
+  "ceil_share": 0.0,
+  "floor_share_nondrop": 0.0,
+  "share_primary": 1.0,
+  "share_model": 0.0,
+  "share_primary_len": 1.0,
+  "share_model_len": 0.0,
+  "w_target_log_check": {
+    "rows": 412,
+    "agree": 412
+  },
+  "share_lost": 0.0,
+  "max_switch_per_leg": 1,
+  "primary_invalid_share": 0.03323262839879154,
+  "elp_rows_age_s32": {
+    "p999": 0.02867000000000002,
+    "max": 0.029,
+    "share_over_age_max": 0.0
+  },
+  "median_abs_du_corr": 0.033670000000000005,
+  "secondary_invalid_share": 0.0,
+  "primary_invalid_why": {
+    "nb": 11
+  },
+  "elp_nobed_max_s": 0.0,
+  "src_agree": {
+    "n": 320,
+    "median": 0.026819999999999997,
+    "p90": 0.06439000000000002,
+    "from_": "ctrl"
+  },
+  "speed_check_online": [
+    {
+      "leg": 1,
+      "ratios": {
+        "12@s15": 0.9951294180020064,
+        "12@s55": 1.006068921563698,
+        "12@s95": 0.9954231635051953,
+        "12@s135": 0.9940338562587285
+      },
+      "ok": true
+    },
+    {
+      "leg": 2,
+      "ratios": {
+        "12@s15": 0.9870746570718696,
+        "12@s55": 0.9916731887299182,
+        "12@s95": 0.9852712627547507,
+        "12@s135": 0.9819659866946565
+      },
+      "ok": true
+    }
+  ],
+  "speed_check_offline": [
+    {
+      "leg": 1,
+      "v_prog": 12.0,
+      "s0": 0.0,
+      "ratio": 1.0
+    },
+    {
+      "leg": 1,
+      "v_prog": 12.0,
+      "s0": 15.0,
+      "ratio": 1.003
+    },
+    {
+      "leg": 1,
+      "v_prog": 12.0,
+      "s0": 55.0,
+      "ratio": 1.003
+    },
+    {
+      "leg": 1,
+      "v_prog": 12.0,
+      "s0": 95.0,
+      "ratio": 0.997
+    },
+    {
+      "leg": 1,
+      "v_prog": 12.0,
+      "s0": 135.0,
+      "ratio": 0.997
+    },
+    {
+      "leg": 2,
+      "v_prog": 12.0,
+      "s0": 0.0,
+      "ratio": 0.997
+    },
+    {
+      "leg": 2,
+      "v_prog": 12.0,
+      "s0": 15.0,
+      "ratio": 1.003
+    },
+    {
+      "leg": 2,
+      "v_prog": 12.0,
+      "s0": 55.0,
+      "ratio": 1.0
+    },
+    {
+      "leg": 2,
+      "v_prog": 12.0,
+      "s0": 95.0,
+      "ratio": 1.0
+    },
+    {
+      "leg": 2,
+      "v_prog": 12.0,
+      "s0": 135.0,
+      "ratio": 1.0
+    }
+  ],
+  "override_not_following_share": 0.0,
+  "watchdog_fallback_share": 0.0,
+  "delay_max": 0.0,
+  "delay_increase_steps": 0,
+  "states_weight": "length",
+  "thresholds": {
+    "within": 0.08,
+    "leg": 0.025,
+    "loop_within_minus_openloop_veff": 0.035
+  },
+  "verdict": {
+    "1_within_leg": true,
+    "2_leg_to_leg": true,
+    "4_ceiling": true,
+    "4p_floor_nondrop": true,
+    "5_states": true,
+    "6_speed_check": true
+  },
+  "success": true,
+  "class": {
+    "rsi_link": {
+      "speed_check": false,
+      "override_not_following": false,
+      "watchdog_fallback": false,
+      "delay": false
+    },
+    "signal_source": {
+      "primary_invalid": false,
+      "lost": false,
+      "no_bore1": false,
+      "disagree": false
+    },
+    "source_blame": false,
+    "both_degraded": false,
+    "sources_agree": true,
+    "process": {
+      "drop_legs": false,
+      "ceiling_bound": false,
+      "floor_bound": false,
+      "bead_off_bed": false
+    },
+    "process_fault": false,
+    "loop": {}
+  },
+  "branch": "pass",
+  "next_print": "A",
+  "next_why": "all judged criteria passed: next plan in the order",
+  "note_sec8": "Note: this suggestion ignores earlier prints. If A_b1 failed today and this A print passed, the next print is A again, not B (B only after both A_b1 and A passed); after a B' / B'' print that passes, go back to the first unprinted plan of the original order. See INTERFACE sec. 8."
+}

@@ -32,6 +32,8 @@ frames. Same file layout as E1, plus the second camera of each pair.
 | `fan1cl_20261103_222754/` | FAN1 closed loop, bore-led | `pattern_usr_ELP_FAN1_261103.json` / `usr_ELP_FAN1_OL_261103.src`: a 155 mm lead and a 155 mm top line at 0 deg, fourteen 60–66 mm lines at −45 … +45 deg | `--mode closed --plan A_b1 --control-sources elp,bore1 --bore2 primary`, `--fan-ctrl-max-deg 90 --fan-bore-max-deg 90`, OvCmd 40 outside the print window |
 | `arc2ol_20261103_235936/` | ARC2 open loop | `pattern_usr_ELP_ARC2_261103.json` / `usr_ELP_ARC2_OL_261103.src`: a straight lead, four rows of semicircles (R 19.375 and R 12.917, every lobe turning the tangent 180 deg), a straight end row | `--mode closed --plan Bpp` (OvCmd 40 everywhere), ELP-A / ELP-B readouts and bore1 / bore2 (shadow) inference logged live, caps 90 / 90 |
 
+| `bduo_20261103_195120/` | CLp4 closed loop, bore-led on both pairs (task T15) | `pattern_usr_ELP_R1v30_CLp_261022.json` (in `src/cl_controller/patterns/`) / `usr_ELP_R1v30_CLp4_261103.src` | `--mode closed --plan A_b1 --control-sources elp,bore1 --elp-b on --bore2 primary --bore-sd-max 0.05`, MDF side `pos`, OvCmd 100 outside the print window; also `roboter/eval_v3_*` |
+
 The `run` column is from `raw_video/session_meta.json` (`realtime`, `bore2`). Both use 120 motor rpm after a purge
 at 400 rpm (program header).
 
