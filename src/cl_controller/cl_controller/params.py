@@ -179,7 +179,10 @@ def build_law_cfg(p: dict) -> LawCfg:
     lc.guard_bed, lc.tgt_schedule = bool(p["guard_bed"]), p["target_schedule"]
     lc.blind_tau, lc.blind_ref, lc.blind_dir = float(p["blind_tau"]), p["blind_ref"], p["blind_dir"]
     if str(p["control_sources"]).strip():                  # run_cl.py 590 / 596: items stripped, empty ones dropped
-        lc.sources = ",".join(x.strip() for x in str(p["control_sources"]).split(",") if x.strip())
+        keep = [x.strip() for x in str(p["control_sources"]).split(",") if x.strip()]
+        if not keep:                                       # run_cl.py 591-592: a list with no source exits
+            raise Refused(f"control_sources {p['control_sources']!r}: give elp and / or bore1, comma separated")
+        lc.sources = ",".join(keep)
     if p["force_seg"]:
         fs = {}
         for part in str(p["force_seg"]).split(","):

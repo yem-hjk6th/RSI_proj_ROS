@@ -141,6 +141,16 @@ def test_control_sources_spaces_stripped_run_cl_590():
         assert cfg.elp_b and lc.sources == ",".join(x.strip() for x in given.split(",") if x.strip())
 
 
+@pytest.mark.parametrize("given", [",", " , ", ",,"])
+def test_refused_control_sources_without_a_source_run_cl_591(given):
+    """run_cl.py 591-592 exit on a --control-sources list with no source. Stripping the items must not turn such a
+    value into "" (no restriction)."""
+    with pytest.raises(Refused, match="control_sources"):
+        _build(control_sources=given)
+    with pytest.raises(Refused, match="control_sources"):
+        _build(control_sources=given, elp_b="off", bore2="off")
+
+
 def test_refused_sources_without_primary_run_cl_594():
     with pytest.raises(Refused, match="control_sources"):
         _build(control_sources="elp")                                  # plan A_b1: primary bore1
