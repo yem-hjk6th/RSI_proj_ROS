@@ -12,6 +12,7 @@ import copy
 import inspect
 import math
 import random
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -99,17 +100,28 @@ def test_controller_with_only_invalid_widths_stays_in_window():
 
 @pytest.mark.parametrize("u", [math.inf, -math.inf, -1e6, 50.0, -50.0, math.nan, 1e6])
 def test_step_with_any_law_state_is_clamped_or_raises(u):
-    """Whatever u holds, a step returns a value in the window or raises; it never returns one outside."""
+    """Whatever u holds, a step returns a value in the window or raises; it never returns one outside.
+
+    The tip is inside the print window and the controller is in control before u is set, so the step computes a
+    command from u (controller.command): a finite u moves the value to the window edge it points at, and a raise comes
+    from ov_from_logk, not from a path that skips the command."""
     c = _ctrl()
-    _drive(c, random.Random(1), lambda r: r.uniform(4.5, 6.0), seconds=8.0)
+    out = _drive(c, random.Random(1), lambda r: r.uniform(4.5, 6.0), seconds=8.0)
+    assert out[-1][1:] == ("control", "inside")
     c = copy.deepcopy(c)
     c.law.u = u
+    c.out_ov, c.out_src = -1, "none"                 # a step that computes no command cannot leave these as they are
     try:
-        ov, _ = c.step(8.05)
-    except (ValueError, OverflowError):
+        ov, src = c.step(8.05)
+    except (ValueError, OverflowError) as e:
+        frames = [f.name for f in traceback.extract_tb(e.__traceback__)]
+        assert "command" in frames and "ov_from_logk" in frames
+        assert math.isnan(u) or abs(u) > 700.0
         return
+    assert (src, c.out_src, c.win.state) == ("control", "control", "inside")
     assert c.cfg.ov_min <= ov <= c.cfg.ov_max
     assert c.cfg.ov_min <= c.published_ov() <= c.cfg.ov_max
+    assert ov == (c.cfg.ov_max if u > 0 else c.cfg.ov_min)     # the value comes from u: |u| >= 50 saturates
 
 
 def test_node_publishes_nothing_when_the_step_raises():
@@ -124,14 +136,66 @@ def test_node_publishes_nothing_when_the_step_raises():
 
 
 # ------------------------------------------------------------------------------------------------ forced latch
+def _latch_writes(tree):
+    """(function, kind, code) of every write to an attribute force_default: plain, annotated and augmented
+    assignments (also inside a tuple target), setattr(..., "force_default", ...) and delattr."""
+    def is_latch(t):
+        return isinstance(t, ast.Attribute) and t.attr == "force_default"
+
+    def targets(t):
+        if isinstance(t, (ast.Tuple, ast.List)):
+            for e in t.elts:
+                yield from targets(e)
+        elif isinstance(t, ast.Starred):
+            yield from targets(t.value)
+        else:
+            yield t
+
+    out = []
+    for fn in (n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))):
+        for n in ast.walk(fn):
+            if isinstance(n, ast.Assign):
+                for t in (x for tt in n.targets for x in targets(tt)):
+                    if is_latch(t):
+                        plain = isinstance(n.targets[0], ast.Attribute) and len(n.targets) == 1
+                        out.append((fn.name, "assign" if plain else "unpack", ast.unparse(n.value) if plain else
+                                    ast.unparse(n)))
+            elif isinstance(n, (ast.AnnAssign, ast.AugAssign)) and is_latch(n.target):
+                out.append((fn.name, type(n).__name__, ast.unparse(n)))
+            elif isinstance(n, ast.Delete) and any(is_latch(t) for t in n.targets):
+                out.append((fn.name, "del", ast.unparse(n)))
+            elif (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in ("setattr", "delattr")
+                  and len(n.args) >= 2 and not (isinstance(n.args[1], ast.Constant)
+                                                and n.args[1].value != "force_default")):
+                out.append((fn.name, n.func.id, ast.unparse(n)))      # also a computed attribute name
+    return out
+
+
 def test_forced_latch_is_only_cleared_in_init():
-    tree = ast.parse(inspect.getsource(ctrl_mod))
+    """Every write to force_default in the controller library sets it to True, except the one in
+    Controller.__init__; an augmented assignment, a tuple target, setattr or delattr counts as a write that clears."""
     clears = []
-    for fn in (n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)):
-        for a in (n for n in ast.walk(fn) if isinstance(n, ast.Assign)):
-            if any(ast.unparse(t) == "self.force_default" for t in a.targets) and ast.unparse(a.value) != "True":
-                clears.append(fn.name)
-    assert clears == ["__init__"]
+    for py in sorted(Path(ctrl_mod.__file__).parent.glob("*.py")):
+        for fn, kind, code in _latch_writes(ast.parse(py.read_text(encoding="utf-8"))):
+            if not (kind == "assign" and code == "True"):
+                clears.append((py.name, fn, kind, code))
+    assert clears == [("controller.py", "__init__", "assign", "False")]
+
+
+@pytest.mark.parametrize("code", [
+    "def f(self):\n    self.force_default = False",
+    "def f(self):\n    self.force_default &= ok",
+    "def f(self):\n    self.force_default -= 1",
+    "def f(self):\n    self.a, self.force_default = 1, False",
+    "def f(self):\n    self.force_default: bool = False",
+    "def f(self):\n    setattr(self, 'force_default', False)",
+    "def f(self, k):\n    setattr(self, k, False)",
+    "def f(c):\n    del c.force_default",
+])
+def test_latch_write_finder_catches_every_kind_of_clear(code):
+    """The finder used above reports each way of clearing the latch."""
+    found = _latch_writes(ast.parse(code))
+    assert len(found) == 1 and not (found[0][1] == "assign" and found[0][2] == "True"), found
 
 
 def test_forced_latch_holds_through_good_data():
