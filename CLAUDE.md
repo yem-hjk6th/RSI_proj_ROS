@@ -22,6 +22,7 @@
 - CI (`.github/workflows/ci.yml`) must pass. If ROS 2 cannot be installed in your session, run the pure-Python tests locally and rely on CI for the colcon build.
 
 ## Safety invariants (never weaken these; tests must cover them)
+- Enforcing code and tests for each invariant, clamp and start refusal: `docs/SAFETY_INVARIANTS.md`.
 1. RSI replies always carry zero position corrections (RKorr = 0).
 2. The commanded override is always clamped to `[ov_min, ov_max]` with the configured speed floor.
 3. If the controller's heartbeat is stale, the bridge ramps linearly to `ov_default` over `fallback_ramp_s`.
