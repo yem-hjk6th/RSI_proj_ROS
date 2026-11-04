@@ -5,6 +5,10 @@ rt_law_v3.plateaus_from_segs / pattern_speed_info / plateaus_at_ov (the -X plate
 Multi-layer walls from legacy/realtime_cl_261023_ml/rt_readout.Pattern: a segs csv with a z_off column gives every A
 leg its planned offset above the layer-1 plane; without it (every single-layer pattern) nothing changes.
 
+Cage 2 (legacy/realtime_cl_cage2_semi_261103/rt_readout.py 154-175): the +X lines are the segs rows of kind B with
+x1 > x0; each carries the number of the A leg printed before it. ``b_line_at(y)`` finds the nearest one, and the arc
+length on a B line is s = x - b_x0[leg]. A pattern without such rows has no B lines (``b_ids`` empty).
+
 `Pattern` and the plateau helpers take parsed data; `load_pattern` is the only function that reads files.
 """
 import csv
@@ -49,6 +53,28 @@ class Pattern:
         self.min_s_tip = float(cfg["min_s_tip"])
         self.last_z = float(cfg["last_z"]) if (self.ml and cfg.get("last_z") is not None) else None
         self.dz_levels = np.unique(self.leg_dz) if self.ml else np.zeros(1)
+        self.geometry = cfg.get("geometry")         # fan / semi patterns (path_geometry); None for straight legs
+        bys, bx0, bx1 = {}, {}, {}
+        for r in self.segs:
+            if r["kind"] == "B" and float(r["x1"]) > float(r["x0"]):
+                k = int(r["leg"])
+                bys.setdefault(k, float(r["y0"]))
+                bx0.setdefault(k, float(r["x0"]))
+                bx1[k] = float(r["x1"])
+        self.b_ids = np.array(sorted(bys), dtype=int)
+        self.b_ys = np.array([bys[k] for k in self.b_ids])
+        self.b_x0, self.b_x1 = bx0, bx1
+
+    def b_line_at(self, y: float):
+        """(leg number of the B line whose y is nearest, |dy|); (-1, inf) without B lines."""
+        if not len(self.b_ids):
+            return -1, float("inf")
+        dy = np.abs(self.b_ys - y)
+        i = int(np.argmin(dy))
+        return int(self.b_ids[i]), float(dy[i])
+
+    def b_y_of(self, leg: int) -> float:
+        return float(self.b_ys[int(np.flatnonzero(self.b_ids == leg)[0])])
 
     def z_cmd(self, x, z=None, y=None):
         """Layer-1 plane at x. Multi-layer with z: plus the planned offset nearest to z - plane; with z and y: plus

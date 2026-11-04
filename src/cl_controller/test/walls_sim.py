@@ -126,7 +126,7 @@ class LegacyBackend:
         self._cm = legacy_import.ml()
         L = self._cm.__enter__()                  # left open for the run: legacy code imports inside functions
         rc, law, rr = L["rt_controller"], L["rt_law_v3"], L["rt_readout"]
-        lcfg = rc.CtrlCfg(**{f.name: getattr(cfg, f.name) for f in fields(cfg)})
+        lcfg = rc.CtrlCfg(**{f.name: getattr(cfg, f.name) for f in fields(cfg) if f.name in rc.CtrlCfg.__dataclass_fields__})
         llc = law.LawCfg(**{f.name: getattr(law_cfg, f.name) for f in fields(law_cfg)})
         self.pat = rr.Pattern(pj, pj.parent)
         plateaus = law.plateaus_at_ov(law.pattern_speed_info(pj), lcfg.ov_base)
