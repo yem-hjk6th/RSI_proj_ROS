@@ -11,6 +11,19 @@ bridge's decider; the PR description lists every one with its run_cl.py line):
   replay with a replay_csv; legacy run_cl loaded the head before RSI and refused A_b1 without it  run_cl.py:676-695
 - the step test's limit_probe is refused (the bridge does not port it: it sent an unclamped value)  run_cl.py:352-355
 - shadow mode is refused unless print_session.krc_rsi_config is RSI_MIN (on RSI_OV4 it is 1 % override)
+Cage 2 (print_session.cage2, T15; legacy/realtime_cl_cage2_semi_261103/run_cl.py): the bringup also starts the ELP-B
+readout (section width_readout_elp_b, kind B) and, with cl_controller.bore2 not off, the bore2 readout (section
+width_readout_bore2, camera bore2). Rigs are bound to the role (ELP-A, ELP-B): the packaged cage-2 rig of the role
+unless the section gives one, never the rig of the other role, never the same file for both. Refusals:
+- cage2 in shadow / closed without cl_controller.elp_b set explicitly                 run_cl.py:1154-1156
+- elp_b on without cage 2 (no ELP-B camera and readout)                                run_cl.py:1158-1159
+- bore2 not off without cage 2 (no bore2 camera and readout)                           run_cl.py:1353, 1365
+- the bore2 readout section without a quality limits file                              run_cl.py:1125-1126
+- bore2 fallback / primary without a bore2 head the node can load (weights / replay)   run_cl.py:1365-1366
+- a bore readout section setting sd_max / w_offset other than the controller's bore_sd_max / bore1_offset_mm /
+  bore2_offset_mm (they are handed to the readout nodes, as run_cl.py handed them to the bore threads)
+- the readout node refusals (width_readout_bore1.params.check, run_cl.py:1120-1131) for both bore sections
+Patterns with "geometry" (fan / semicircle) are refused by the controller's configuration (T16; T13 review, PR #42).
 ROS-only checks (no run_cl.py counterpart, they keep the separate nodes consistent):
 - the bridge, the readouts and the controller use the same pattern file;
 - the bridge's effective window (floor included) equals the controller's;
@@ -39,6 +52,7 @@ SHADOW_WARNING = ("SHADOW MODE: the replies carry no OvCmd. On a KRC program tha
 # node names = the top-level keys of the parameter file
 BRIDGE, CONTROLLER, READOUT, SESSION = "krc_rsi_bridge", "cl_controller", "width_readout_elp", "print_session"
 BORE1 = "width_readout_bore1"
+READOUT_B, BORE2 = "width_readout_elp_b", "width_readout_bore2"     # cage 2
 
 SESSION_PARAMS = dict(
     bore1_readout=False,        # the bringup starts width_readout_bore1 (section width_readout_bore1 of the params
@@ -47,6 +61,8 @@ SESSION_PARAMS = dict(
     src_name="",                # the .src running on the KRC (run_cl --src-name), written to session_meta
     ceiling_light="",           # on | off | "" (run_cl --ceiling-light), written to session_meta
     krc_rsi_config="RSI_OV4",   # the RSI configuration the KRC program loads (RSI_CREATE); shadow mode needs RSI_MIN
+    cage2=False,                # cage 2 (two ELPs, two borescopes): the bringup also starts the ELP-B readout and,
+                                # with cl_controller.bore2 not off, the bore2 readout; cl_controller.elp_b required
 )
 
 
@@ -63,6 +79,9 @@ class Plan:
     session: Dict[str, object]          # print_session parameters (defaults + file)
     realtime: dict                      # session_meta.json "realtime"
     log: List[str] = field(default_factory=list)   # lines the legacy start-up printed (warnings)
+    readout_b: Optional[Dict[str, object]] = None   # cage 2: overrides for width_readout_elp_b (None = not started)
+    bore2: Optional[Dict[str, object]] = None       # cage 2: overrides for width_readout_bore2 (None = not started)
+    needs_bore2: bool = False                       # bore2 fallback / primary: the session ends without it
 
 
 def load_params(params_file) -> Dict[str, dict]:
@@ -223,20 +242,69 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
         raise Refused(f"bridge window {lim[0]}..{lim[1]} (floor {lim[2]}) differs from the controller's "
                       f"{want[0]}..{want[1]} (floor {want[2]})")
 
+    # ---- cage 2: the flags that need the second camera pair
+    cage2 = bool(sess["cage2"])
+    ctl_file = params.get(CONTROLLER, {})
+    if cage2 and mode != "step" and "elp_b" not in ctl_file:
+        raise Refused(f"cage 2: set {CONTROLLER}.elp_b on | off (on = ELP-B controls the +X lines; off = +X lines "
+                      f"held) (run_cl.py:1154)")
+    if cfg.elp_b and not cage2:
+        raise Refused(f"{CONTROLLER}.elp_b on needs the ELP-B camera and readout: set {SESSION}.cage2 true "
+                      f"(run_cl.py:1158)")
+    bore2_mode = str(cl["bore2"])
+    if bore2_mode != "off" and not cage2:
+        raise Refused(f"{CONTROLLER}.bore2 {bore2_mode} needs the bore2 camera and readout: set {SESSION}.cage2 true")
+
     # ---- readout: the same pattern
     readout = None
     rd_file = params.get(READOUT, {})
-    rig = Path(rd_file.get("rig_json") or default_rig())
+    rig = Path(rd_file.get("rig_json") or (role_rig("elpA") if cage2 else default_rig()))
+    _rig_role("A", rig, READOUT)
     if image_topic:
         if rd_file.get("pattern_json") and not _same_file(rd_file["pattern_json"], pj):
             raise Refused(f"{READOUT}.pattern_json {rd_file['pattern_json']} is not the controller's pattern {pj}")
         readout = dict(image_topic=image_topic, pattern_json=str(pj), rig_json=str(rig))
 
-    # ---- bore1 readout: the same pattern, a head it can load
+    # ---- ELP-B readout (cage 2): kind B, its rig by role, the same pattern
+    readout_b = None
+    if cage2 and image_topic:
+        rb_file = params.get(READOUT_B, {})
+        rig_b = Path(rb_file.get("rig_json") or role_rig("elpB"))
+        _rig_role("B", rig_b, READOUT_B)
+        if _same_file(rig_b, rig):
+            raise Refused(f"{READOUT}.rig_json and {READOUT_B}.rig_json are the same file {rig}: one rig per role")
+        if rb_file.get("pattern_json") and not _same_file(rb_file["pattern_json"], pj):
+            raise Refused(f"{READOUT_B}.pattern_json {rb_file['pattern_json']} is not the controller's pattern {pj}")
+        for k, want in (("kind", "B"), ("width_topic", "/width/elp_b"), ("camera", "elp_b")):
+            if k in rb_file and rb_file[k] != want:
+                raise Refused(f"{READOUT_B}.{k} {rb_file[k]!r}: the ELP-B readout is {k} {want!r}")
+        if not len(pat.b_ids):
+            log.append(f"ELP-B readout off: pattern {pat.src} has no +X lines (elp_b off; run_cl.py:1299)")
+        else:
+            readout_b = dict(kind="B", camera="elp_b", width_topic="/width/elp_b", pattern_json=str(pj),
+                             rig_json=str(rig_b), image_topic=rb_file.get("image_topic", "/elp_b/image_raw"),
+                             b_mdf_side=rb_file.get("b_mdf_side", "pos"))
+            log.append(f"ELP-B readout: {READOUT_B} on {readout_b['image_topic']} -> /width/elp_b, rig {rig_b.name}, "
+                       f"MDF band {readout_b['b_mdf_side']}; " + ("controls the +X lines (law B)" if cfg.elp_b else
+                                                                   "logged only (elp_b off)"))
+
+    # ---- bore readouts: the same pattern, a head they can load, the controller's sd limit and offsets
+    derived_bore = {BORE1: dict(sd_max=float(cl["bore_sd_max"]), w_offset=float(cl["bore1_offset_mm"])),
+                    BORE2: dict(sd_max=float(cl["bore_sd_max"]), w_offset=float(cl["bore2_offset_mm"]))}
     bore1 = None
     if sess["bore1_readout"]:
-        bore1 = dict(pattern_json=str(pj))
-        log.append(bore1_check(params.get(BORE1, {}), pj))
+        bore1 = dict(pattern_json=str(pj), **derived_bore[BORE1])
+        log.append(bore1_check(params.get(BORE1, {}), pj, BORE1, derived_bore[BORE1]))
+    bore2, needs_b2 = None, bore2_mode in ("fallback", "primary") and mode != "step"
+    if bore2_mode != "off":
+        b2 = params.get(BORE2, {})
+        bore2 = dict(pattern_json=str(pj), camera="bore2", width_topic="/width/bore2",
+                     record_topic="/width/bore2/record", image_topic=b2.get("image_topic", "/bore2/image_raw"),
+                     **derived_bore[BORE2])
+        log.append(bore1_check(b2, pj, BORE2, {**derived_bore[BORE2], "camera": "bore2", "width_topic": "/width/bore2",
+                                                "record_topic": "/width/bore2/record"}))
+        log.append(f"bore2 {bore2_mode}: " + ("bore2 steers law B" if needs_b2 else "head and log only, the controller "
+                                                                                     "ignores the rows"))
 
     # ---- what the legacy start-up printed
     info = pattern_speed_info(pat)
@@ -256,38 +324,78 @@ def plan(params: Dict[str, dict], mode: str, image_topic: str = "/elp/image_raw"
 
     realtime = dict(mode=mode, cfg=_jsonable(asdict(cfg)), rig=str(rig), pattern=str(pj), version=VERSION,
                     law=_jsonable(asdict(law_cfg)), order=list(ctrl.law.order), speed=speed)
+    if cage2:                                  # the cage-2 keys of the legacy realtime block
+        realtime.update(rig_b=readout_b["rig_json"] if readout_b else None, elp_b="on" if cfg.elp_b else "off",
+                        control_sources=law_cfg.sources or "elp,bore1",
+                        b_mdf_side=readout_b["b_mdf_side"] if readout_b else None,
+                        law_b=_jsonable(asdict(ctrl.law_b.cfg)) if ctrl.law_b is not None else None,
+                        bore_dual=dict(bore2=bore2_mode, bore2_ctl=cfg.bore2,
+                                       bore_sd_max=None if math.isinf(float(cl["bore_sd_max"]))
+                                       else float(cl["bore_sd_max"]), bore_s_use=cfg.bore_s_use,
+                                       bore1_offset_mm=float(cl["bore1_offset_mm"]),
+                                       bore2_offset_mm=float(cl["bore2_offset_mm"])))
+        if cfg.elp_b:
+            log.append(f"cage 2 ELP-B ON: -X A legs -> law A ({' -> '.join(ctrl.law.order)} -> model), +X B lines (leg "
+                       f">= {cfg.b_from_leg}) -> law B ({' -> '.join(ctrl.law_b.order)} -> model); elsewhere u held")
+        else:
+            log.append("cage 2 ELP-B OFF: +X lines held" + ("; ELP-B readout logged only" if readout_b else ""))
     return Plan(mode=mode, pattern=pj, rig=rig, bridge=bridge, controller=dict(mode=mode, pattern=str(pj)),
                 readout=readout, bore1=bore1, needs_bore1=bool(needs_b1 and mode != "step"), session=sess,
-                realtime=realtime, log=log)
+                realtime=realtime, log=log, readout_b=readout_b, bore2=bore2, needs_bore2=bool(needs_b2))
 
 
-def bore1_check(sec: dict, pattern: Path) -> str:
-    """Refuse a width_readout_bore1 section the node could not start with; else the start-up line."""
+def role_rig(role: str) -> Path:
+    from width_readout_elp.config import role_rig_json
+    return Path(role_rig_json(role))
+
+
+def _rig_role(kind: str, rig: Path, section: str) -> None:
+    from width_readout_elp.config import check_rig_role
+    try:
+        check_rig_role(kind, rig)
+    except ValueError as e:
+        raise Refused(f"{section}: {e}") from e
+
+
+def bore1_check(sec: dict, pattern: Path, node: str = BORE1, derived: Optional[dict] = None) -> str:
+    """Refuse a bore readout section (width_readout_bore1 / width_readout_bore2) the node could not start with, or
+    that sets a value the controller's section decides (``derived``); else the start-up line."""
     from width_readout_bore1.head import HEAD_KINDS, SEEDS, weight_name
-    from width_readout_bore1.params import FRAME_TIMES, PARAMS
-    p = {**PARAMS, **sec}
+    from width_readout_bore1.params import FRAME_TIMES, PARAMS, check
+    derived = dict(derived or {})
+    clash = [f"{k}: {sec[k]!r} (from {CONTROLLER}: {v!r})" for k, v in derived.items()
+             if k in sec and not (sec[k] == v or (isinstance(v, float) and float(sec[k]) == v))]
+    if clash:
+        raise Refused(f"{node} sets values that follow from {CONTROLLER}; remove them from its section: "
+                      + "; ".join(clash))
+    p = {**PARAMS, **sec, **derived}
     if sec.get("pattern_json") and not _same_file(sec["pattern_json"], pattern):
-        raise Refused(f"{BORE1}.pattern_json {sec['pattern_json']} is not the controller's pattern {pattern}")
+        raise Refused(f"{node}.pattern_json {sec['pattern_json']} is not the controller's pattern {pattern}")
     if sec.get("lockstep"):
-        raise Refused(f"{BORE1}.lockstep is for replay tests only")
+        raise Refused(f"{node}.lockstep is for replay tests only")
     if p["head"] not in HEAD_KINDS:
-        raise Refused(f"{BORE1}.head {p['head']!r}: one of {', '.join(HEAD_KINDS)}")
+        raise Refused(f"{node}.head {p['head']!r}: one of {', '.join(HEAD_KINDS)}")
     if p["frame_time"] not in FRAME_TIMES:
-        raise Refused(f"{BORE1}.frame_time {p['frame_time']!r}: one of {', '.join(FRAME_TIMES)}")
+        raise Refused(f"{node}.frame_time {p['frame_time']!r}: one of {', '.join(FRAME_TIMES)}")
+    try:
+        check(p)
+    except ValueError as e:
+        raise Refused(f"{node}: {e}") from e
     if p["head"] == "torch":
         wd = Path(str(p["weight_dir"] or ""))
         if not str(p["weight_dir"] or "") or not wd.is_dir():
-            raise Refused(f"{BORE1}.weight_dir {str(p['weight_dir'])!r} is not a folder: the bore1 head needs the "
-                          f"weights (cnxt_t_deploy_s0.pt .. s2.pt, not in this repository)")
+            raise Refused(f"{node}.weight_dir {str(p['weight_dir'])!r} is not a folder: the {p['camera']} head needs "
+                          f"the weights (cnxt_t_deploy_s0.pt .. s2.pt, not in this repository)")
         missing = [weight_name(s) for s in SEEDS if not (wd / weight_name(s)).is_file()]
         if missing:
-            raise Refused(f"{BORE1}.weight_dir {wd}: missing {', '.join(missing)}")
+            raise Refused(f"{node}.weight_dir {wd}: missing {', '.join(missing)}")
         what = f"torch head, weights {wd} (sha256 checked by the node), device {p['device']}"
     else:
         if not p["replay_csv"] or not Path(p["replay_csv"]).is_file():
-            raise Refused(f"{BORE1}.head replay needs replay_csv (a bore1_rt csv): {p['replay_csv']!r} not found")
+            raise Refused(f"{node}.head replay needs replay_csv (a {p['camera']}_rt csv): {p['replay_csv']!r} not "
+                          f"found")
         what = f"REPLAY head ({Path(p['replay_csv']).name}): logged head outputs, not the camera"
-    return (f"bore1 readout: {BORE1} on {p['image_topic']} -> {p['width_topic']}, {p['record_topic']}; {what}; frame "
+    return (f"{p['camera']} readout: {node} on {p['image_topic']} -> {p['width_topic']}, {p['record_topic']}; {what}; frame "
             f"time {p['frame_time']}" + (f" + {p['header_offset_s']} s" if p["frame_time"] == "header" else ""))
 
 

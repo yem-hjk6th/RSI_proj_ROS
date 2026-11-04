@@ -10,7 +10,9 @@ The bringup sets, per camera:
 
 Refused: a camera file and ``start_camera:=true`` (usb_cam) together; a section that sets one of the values above;
 two cameras with the same image topic or file names; and, with the readout on, an ``image_topic`` that none of the
-cameras publishes (also the bore1 readout's ``image_topic`` when it runs).
+cameras publishes (also the bore1 readout's ``image_topic`` when it runs, and in cage 2 those of the ELP-B and bore2
+readouts); a camera that a readout reads but whose section sets ``publish_raw: false`` (the cage file's elp_b and bore2
+sections do) is refused too.
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,7 +43,8 @@ class CameraNode:
 
 
 def plan_cameras(cameras: Dict[str, dict], session: str, session_dir: Path, image_topic: str, readout: bool,
-                 usb_cam: bool, bore1_topic: str = "") -> List[CameraNode]:
+                 usb_cam: bool, bore1_topic: str = "", extra_topics: Dict[str, str] = None) -> List[CameraNode]:
+    """``extra_topics``: {readout node: image topic} of further readouts (cage 2: ELP-B, bore2)."""
     """One ``CameraNode`` per section of the camera file (``{node name: ros__parameters}``), or Refused."""
     if not cameras:
         return []
@@ -75,4 +78,15 @@ def plan_cameras(cameras: Dict[str, dict], session: str, session_dir: Path, imag
     if bore1_topic and bore1_topic not in seen_topics:
         raise Refused(f"bore1 readout on {bore1_topic}, but no camera in the camera file publishes it (they publish "
                       f"{', '.join(seen_topics)}); set width_readout_bore1.image_topic")
+    needed = dict(extra_topics or {})
+    if readout:
+        needed.setdefault("width_readout_elp", image_topic)
+    if bore1_topic:
+        needed.setdefault("width_readout_bore1", bore1_topic)
+    for node, topic in needed.items():
+        if topic not in seen_topics:
+            raise Refused(f"{node} reads {topic}, but no camera in the camera file publishes it (they publish "
+                          f"{', '.join(seen_topics)}); set {node}.image_topic")
+        if (cameras[seen_topics[topic]] or {}).get("publish_raw", True) is False:
+            raise Refused(f"{node} reads {topic}, but camera {seen_topics[topic]} sets publish_raw false: set it true")
     return out

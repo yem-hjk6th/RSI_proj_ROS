@@ -9,7 +9,7 @@
 """
 import math
 
-from cl_controller.record import CTRL_COLS  # noqa: F401  (re-exported: the one list of the ctrl columns)
+from cl_controller.record import CTRL_COLS, SWITCH_COLS  # noqa: F401  (re-exported: the one list of each)
 from width_readout_bore1.readout import B1_COLS  # noqa: F401  (re-exported: the bore1_rt columns)
 
 RSI_COLS = ["pc_ts_monotonic", "pc_ts_wall", "ipoc", "rist_x_mm", "rist_y_mm", "rist_z_mm", "rist_a_deg", "rist_b_deg",
@@ -23,7 +23,9 @@ ROWS_COLS = ["frame", "d", "s_dep", "w"]
 # ctrl columns -> decimals of run_cl.log_update (_f(x, nd)); t_perf / t_wall are written with "%.6f"
 CTRL_ND = dict(s_tip=3, veff=3, w_est=4, rhat=5, rhat_f=5, logk=5, slow=5, k=5, ov_raw=3, rows_age_s=3, rhat_elp=5,
                lag_elp=3, rhat_b1=5, lag_b1=3, e=5, du=5, u=5, lnk_ff=5, v_tip=3, w_target=3, lnk_tgt=5, nobed_s=2,
-               lnk_ol=5, du_blind=5, t_blind=2)
+               lnk_ol=5, du_blind=5, t_blind=2, vx=2)
+# switch_<ses>.csv (cage 2): decimals of run_cl.log_switch; t_perf / t_wall "%.6f"
+SWITCH_ND = dict(vx=2, x=2, y=2, z=3, s=2, u=5)
 CTRL_BOOL = ("on_a", "have_est", "forced")
 CTRL_TRI = ("valid_elp", "valid_b1", "hold_bed")
 

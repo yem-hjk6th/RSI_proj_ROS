@@ -51,7 +51,9 @@ class SessionNode(Node):
                                   cameras_file=Path(g("cameras_file")).name if g("cameras_file") else "",
                                   raw_video="raw_video" if g("cameras") else "", bag=g("bag"),
                                   storage_id=T.STORAGE_ID, record_regex=T.RECORD_REGEX,
-                                  disconnect_timeout_s=self.timeout_s, bore1_readout=bool(g("bore1_readout"))),
+                                  disconnect_timeout_s=self.timeout_s, bore1_readout=bool(g("bore1_readout")),
+                                  cage2=bool(g("cage2")), readout_b=p.readout_b is not None,
+                                  bore2_readout=p.bore2 is not None),
         })
         self.get_logger().info(f"session {g('session')} mode={p.mode}: {self.meta_path}")
         self.n_pkt = 0

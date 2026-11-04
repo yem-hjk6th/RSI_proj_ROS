@@ -71,7 +71,7 @@ def e1_items():
             else:
                 kw[c] = int(v)
         for c in CTRL_ND:
-            kw.setdefault(c, math.nan)        # columns the E1 version did not write (du_blind, t_blind)
+            kw.setdefault(c, math.nan)        # columns the E1 version did not write (du_blind, t_blind, vx)
         m = CtrlRecord(**kw)
         items.append((T.CTRL, m, _stamp(m, float(row["t_wall"]))))
     RO = _csv("roboter", "readout")

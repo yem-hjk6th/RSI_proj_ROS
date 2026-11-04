@@ -96,3 +96,49 @@ def test_bore1_rows_legacy_format(tmp_path):
     with open(tmp_path / "raw_video" / "s1" / "bore1_rt_s1.csv", newline="") as f:
         r = list(csv.reader(f))
     assert r[0] == B1_COLS and r[1][:4] == ["1", "7.230000", "7.300000", "ok"]
+
+
+def test_cage2_files(tmp_path):
+    """T15: switch_<ses>.csv from SwitchRecord messages (here: the live rows of session bduo, as unrounded values),
+    readoutB / readoutB_rows from /width/elp_b, bore2_rt from /width/bore2/record; the cage-2 ctrl columns."""
+    import gzip
+
+    from e1_paths import REPO
+    from print_session.legacy_cols import SWITCH_COLS
+    p = REPO / "data" / "bduo_20261103_195120" / "roboter" / "switch_20261103_195120.csv.gz"
+    with gzip.open(p, "rt", newline="", encoding="utf-8") as f:
+        live = list(csv.reader(f))
+    assert live[0] == SWITCH_COLS
+    nan = math.nan
+    msgs = []
+    for r in live[1:]:
+        v = dict(zip(SWITCH_COLS, r))
+        num = {k: float(v[k]) if v[k] != "" else nan for k in ("vx", "x", "y", "z", "s", "u")}
+        msgs.append(NS(stamp=_t(float(v["t_wall"])), t_perf=float(v["t_perf"]), from_label=v["from"], to_label=v["to"],
+                       leg=int(v["leg"]), kind=v["kind"], dir=v["dir"], ov_cmd=int(v["ov_cmd"]), why=v["why"], **num))
+    counts = export({T.SWITCH: msgs, T.WIDTH_ELP_B: [_w(2.0, 1, 13.5, 4.5, 5.3, s_tip=18.0)],
+                     T.BORE2_RECORD: []}, tmp_path, "S")
+    assert counts["switch_S.csv"] == len(live) - 1 and counts["readoutB_S.csv"] == 1
+    assert counts["readoutB_rows_S.csv"] == 1 and "bore2_rt_S.csv" not in counts
+    with open(tmp_path / "roboter" / "S" / "switch_S.csv", newline="", encoding="utf-8") as f:
+        got = list(csv.reader(f))
+    assert got[0] == live[0]
+    for a, b in zip(got[1:], live[1:]):
+        for c, x, y in zip(SWITCH_COLS, a, b):
+            if c == "t_wall":
+                assert abs(float(x) - float(y)) <= 1e-6         # through a Time stamp (ns)
+            elif c in ("vx", "x", "y", "z", "s", "u") and y != "":
+                assert float(x) == float(y), (c, x, y)          # the legacy writer's repr of round(x, nd)
+            else:
+                assert x == y, (c, x, y)
+
+
+def test_ctrl_row_cage2_columns():
+    vals = {c: math.nan for c in CTRL_COLS}
+    vals.update(t_perf=1.0, n_upd=3, win="inside", leg=2, on_a=False, n_bins=4, have_est=True, ov_round=43, ov_pub=43,
+                src="control", forced=False, plan="A_b1", state="bore1", reason="ok", gate="corr", valid_elp=1,
+                why_elp="", valid_b1=1, why_b1="", n_corr=1, n_switch=0, hold_bed=0, law="B", kind="B", dir="+X",
+                vx=13.0049, src_active="bore2", src_why="dir +X on B line 2: ok")
+    m = NS(stamp=_t(5.0), **{k: v for k, v in vals.items() if k != "t_wall"})
+    r = dict(zip(CTRL_COLS, ctrl_row(m)))
+    assert (r["law"], r["kind"], r["dir"], r["vx"], r["src_active"]) == ("B", "B", "+X", 13.0, "bore2")

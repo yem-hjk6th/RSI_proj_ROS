@@ -4,7 +4,8 @@
     python3 legacy/realtime_cl_261023/eval_v3_print.py --data <out_dir> --session <ses> --pattern <pattern json>
 
 Writes <out>/roboter/<ses>/{rsi_data,ov_cmd,ctrl,readout,readout_rows}_<ses>.csv, <out>/raw_video/<ses>/bore1_rt_<ses>.csv
-when the bag has bore1 records, and copies session_meta.json to <out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
+when the bag has bore1 records, and the cage-2 logs (switch_, readoutB_, readoutB_rows_, raw_video bore2_rt_) when
+the bag has their topics, and copies session_meta.json to <out>/raw_video/<ses>/. The session name comes from --session, else session_meta.json, else the bag's parent folder.
 """
 import argparse
 import json
@@ -24,6 +25,8 @@ def main(argv=None) -> int:
     ap.add_argument("--meta", default=None, help="session_meta.json (default: next to the bag folder)")
     ap.add_argument("--elp-topic", default=T.WIDTH_ELP, help="Width topic of the ELP readout")
     ap.add_argument("--bore1-topic", default=T.BORE1_RECORD, help="Bore1Record topic of the bore1 readout")
+    ap.add_argument("--elp-b-topic", default=T.WIDTH_ELP_B, help="Width topic of the ELP-B readout (cage 2)")
+    ap.add_argument("--bore2-topic", default=T.BORE2_RECORD, help="Bore1Record topic of the bore2 readout (cage 2)")
     a = ap.parse_args(argv)
     bag = Path(a.bag)
     meta = Path(a.meta) if a.meta else bag.parent / "session_meta.json"
@@ -32,10 +35,12 @@ def main(argv=None) -> int:
         ses = json.loads(meta.read_text(encoding="utf-8")).get("session_ts")
     ses = ses or bag.resolve().parent.name
     from .bag_io import read_bag
-    msgs = read_bag(bag, [T.STATE, T.REPLY, T.CTRL, a.elp_topic, a.bore1_topic])
-    counts = export(msgs, a.out, ses, meta if meta.exists() else None, a.elp_topic, a.bore1_topic)
+    msgs = read_bag(bag, [T.STATE, T.REPLY, T.CTRL, T.SWITCH, a.elp_topic, a.bore1_topic, a.elp_b_topic,
+                          a.bore2_topic])
+    counts = export(msgs, a.out, ses, meta if meta.exists() else None, a.elp_topic, a.bore1_topic, a.elp_b_topic,
+                    a.bore2_topic)
     for name, n in counts.items():
-        sub = "raw_video" if name.startswith("bore1_rt_") else "roboter"
+        sub = "raw_video" if name.startswith(("bore1_rt_", "bore2_rt_")) else "roboter"
         print(f"{n:8d} rows  {Path(a.out) / sub / ses / name}")
     for f, cols in NOT_CARRIED.items():
         print(f"not carried by the topics ({f}): " + ", ".join(k for k in cols if not k.startswith("_")))
