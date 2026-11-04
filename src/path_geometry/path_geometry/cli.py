@@ -3,7 +3,8 @@
     angle_failure_map --session data/<dir> [--pattern P] [--out DIR] [--bin 15] [--plots]
 
 The pattern is found from ``session_meta.json`` (``realtime.pattern``) by file name in ``path_geometry/patterns/``
-unless ``--pattern`` gives a json (a path, or a file name in that folder). Tables (and with ``--plots`` one PNG per
+unless ``--pattern`` gives a json (a path, or a bare file name in that folder; a path with a folder part that does
+not exist fails, it never falls back to the packaged pattern of the same name). Tables (and with ``--plots`` one PNG per
 camera) go to ``--out`` (default: the session's ``roboter`` folder).
 """
 from __future__ import annotations
@@ -14,13 +15,12 @@ from pathlib import Path
 import numpy as np
 
 from .failure_map import BIN, Session, failure_map, gate_log_check, write_tables
-from .geometry import find_pattern, load_pattern
+from .geometry import find_pattern, load_pattern, pattern_path
 
 
 def resolve_pattern(sess: Session, pattern=None) -> Path:
     if pattern is not None:
-        p = Path(pattern)
-        return p if p.exists() else find_pattern(p.name)
+        return pattern_path(pattern)          # the readouts' rule (PR #44 review, follow-up 5)
     return find_pattern(sess.pattern_name())
 
 

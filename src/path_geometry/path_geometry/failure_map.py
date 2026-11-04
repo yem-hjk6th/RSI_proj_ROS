@@ -67,7 +67,9 @@ def find_csv(folder: Path, stem: str) -> Optional[Path]:
 
 class Session:
     """The logs of one print in the layout of ``data/``: ``<dir>/raw_video/`` and ``<dir>/roboter/`` (the legacy
-    layout ``<dir>/raw_video/<ses>/`` and ``<dir>/roboter/<ses>/`` is accepted too), ``.csv`` or ``.csv.gz``."""
+    layout ``<dir>/raw_video/<ses>/`` and ``<dir>/roboter/<ses>/`` is accepted too), ``.csv`` or ``.csv.gz``.
+    ``session_meta.json`` is read from ``raw_video/`` (or ``raw_video/<ses>/``), else from ``<dir>`` itself (the
+    print_session bringup's session folder)."""
 
     def __init__(self, root, ses: Optional[str] = None):
         self.root = Path(root)
@@ -77,8 +79,8 @@ class Session:
         if meta is not None:
             import json
             self.meta = json.loads(meta.read_text(encoding="utf-8"))
-        if ses is None:
-            ses = (self.meta or {}).get("session_ts")
+        if ses is None:     # legacy run_cl: session_ts; print_session's session node: print_session.session
+            ses = (self.meta or {}).get("session_ts") or ((self.meta or {}).get("print_session") or {}).get("session")
         if ses is None:
             raise ValueError(f"{self.root}: no session_meta.json with session_ts; give the session id")
         self.ses = str(ses)
@@ -86,10 +88,12 @@ class Session:
         self.rdir = self._dir("roboter")
 
     def _meta_path(self, ses):
+        # raw_video/ (the data/ and exported layouts), else the session root (where the print_session bringup writes it)
         cands = [self.root / "raw_video" / "session_meta.json"]
         if ses is not None:
             cands.append(self.root / "raw_video" / str(ses) / "session_meta.json")
         cands += sorted((self.root / "raw_video").glob("*/session_meta.json"))
+        cands.append(self.root / "session_meta.json")
         for c in cands:
             if c.exists():
                 return c
@@ -245,7 +249,9 @@ def gate_log_check(B: pd.DataFrame, sess: Session) -> Optional[pd.DataFrame]:
     files = gate_log_files(sess)
     if not files or B.empty:
         return None
-    G = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    logs = [pd.read_csv(f) for f in files]
+    # a header-only log (a camera with no gated frame) would make every column of the concat dtype object
+    G = pd.concat([g for g in logs if not g.empty] or logs[:1], ignore_index=True)
     return B.merge(G[G.cam.isin(["bore1", "bore2"])], left_on=["cam", "t_frame"], right_on=["cam", "t"], how="inner")
 
 

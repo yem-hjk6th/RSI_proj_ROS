@@ -100,3 +100,19 @@ def test_gate_log_check_finds_per_camera_files(tmp_path):
     _write(tmp_path / "roboter" / "semi_gate_S1.csv", _gate_rows("bore1", [2.0]))
     assert [f.name for f in gate_log_files(Session(tmp_path))] == ["semi_gate_S1.csv"]
     assert len(gate_log_check(B, Session(tmp_path))) == 1
+
+
+def test_cli_pattern_with_missing_folder_fails(tmp_path):
+    """PR #44 review, follow-up 5: angle_failure_map --pattern follows the readouts' rule. A value with a folder part
+    that does not exist fails; only a bare file name falls back to the packaged pattern."""
+    from path_geometry.cli import main, resolve_pattern
+    (tmp_path / "raw_video").mkdir()
+    (tmp_path / "raw_video" / "session_meta.json").write_text(json.dumps({"session_ts": "S1"}), encoding="utf-8")
+    sess = Session(tmp_path)
+    assert resolve_pattern(sess, FAN1) == find_pattern(FAN1)
+    missing = tmp_path / "nowhere" / FAN1
+    with pytest.raises(FileNotFoundError):
+        resolve_pattern(sess, str(missing))
+    with pytest.raises(FileNotFoundError):
+        main(["--session", str(tmp_path), "--pattern", str(missing), "--out", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()

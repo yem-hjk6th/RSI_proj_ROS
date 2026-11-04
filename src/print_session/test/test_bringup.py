@@ -89,6 +89,21 @@ def test_bad_mode_or_refused_start(tmp_path, args, needle):
     assert not (tmp_path / "x" / "session_meta.json").exists()
 
 
+def _missing_ipocs(msgs, T, out):
+    """Failure message of the state / reply count check: which packets each topic lacks (start, end or a gap in the
+    middle tells recorder discovery from a dropped burst) and the bridge's largest publish batch."""
+    st = {int(m.ipoc) for m in msgs.get(T.STATE, [])}
+    rp = {int(m.ipoc) for m in msgs.get(T.REPLY, [])}
+    allp = sorted(st | rp)
+    pos = {ip: k for k, ip in enumerate(allp)}
+
+    def where(missing):
+        k = sorted(pos[ip] for ip in missing)
+        return f"{len(k)} (positions {k[:5]}...{k[-5:]} of {len(allp)})" if k else "0"
+    batch = [line for line in out.splitlines() if "largest batch" in line]
+    return f"states missing {where(rp - st)}, replies missing {where(st - rp)}; {batch[-1:] or 'no bridge summary'}"
+
+
 def test_shadow_bringup_against_krc_sim(tmp_path):
     from krc_sim.sim import SimConfig, SimProcess
 
@@ -145,7 +160,7 @@ def test_shadow_bringup_against_krc_sim(tmp_path):
     msgs = read_bag(bag)
     n_state = len(msgs.get(T.STATE, []))
     assert n_state >= 0.9 * st.sent, (n_state, st.sent)
-    assert abs(len(msgs.get(T.REPLY, [])) - n_state) <= 10
+    assert abs(len(msgs.get(T.REPLY, [])) - n_state) <= 10, _missing_ipocs(msgs, T, out)
     assert all(r.ov_sent is False for r in msgs[T.REPLY])
     assert len(msgs.get(T.CTRL, [])) > 10 and len(msgs.get(T.OVERRIDE, [])) > 10
 

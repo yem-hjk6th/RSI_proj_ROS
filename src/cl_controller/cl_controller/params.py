@@ -178,8 +178,8 @@ def build_law_cfg(p: dict) -> LawCfg:
     lc.tau_slow, lc.tau_model, lc.start_mix = float(p["tau_slow"]), float(p["tau_model"]), float(p["start_mix"])
     lc.guard_bed, lc.tgt_schedule = bool(p["guard_bed"]), p["target_schedule"]
     lc.blind_tau, lc.blind_ref, lc.blind_dir = float(p["blind_tau"]), p["blind_ref"], p["blind_dir"]
-    if str(p["control_sources"]).strip():                  # run_cl.py 590 / 596: items stripped, empty ones dropped
-        keep = [x.strip() for x in str(p["control_sources"]).split(",") if x.strip()]
+    if str(p["control_sources"]):                          # run_cl.py 589 tests the raw string: "  " is given
+        keep = [x.strip() for x in str(p["control_sources"]).split(",") if x.strip()]   # 590 / 596: items stripped
         if not keep:                                       # run_cl.py 591-592: a list with no source exits
             raise Refused(f"control_sources {p['control_sources']!r}: give elp and / or bore1, comma separated")
         lc.sources = ",".join(keep)
