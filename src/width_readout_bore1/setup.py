@@ -12,7 +12,12 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
-        ("share/" + package_name + "/config", glob("config/*")),
+        ("share/" + package_name + "/config", glob("config/*.*")),
+        *[("share/" + package_name + "/" + d, glob(d + "/*.*"))
+          for d in ("config/bore_weights/deploy_bore1_cage2ft_261103",
+                    "config/bore_weights/deploy_bore1_cage2ft_261103/weights",
+                    "config/bore_weights/deploy_bore2_cage2ft_261103",
+                    "config/bore_weights/deploy_bore2_cage2ft_261103/weights")],
     ],
     install_requires=["setuptools"],
     zip_safe=True,

@@ -18,6 +18,11 @@ Fan and semicircle patterns (T13): the gate is ``gate.make_gate(pattern, max_deg
 ``angle`` added); on a semi pattern each passed frame also writes a gate log row (``gate_log``, a
 ``path_geometry.gates.GateLog``), before the head runs, as the legacy gate did.
 
+bore2 (cage 2, T15): ``camera="bore2"`` gates with ``gate.bore2_gate`` (the +X lines; reason ``line_or_x``); the rows
+are those of the legacy ``Bore2Thread`` (the bore1_rt columns, written to bore2_rt_<ses>.csv; ``leg`` = the B line).
+``w_offset`` (legacy ``--bore1-offset-mm`` / ``--bore2-offset-mm``, both bores) is added to the width the controller
+receives (``WidthRow.w``), not to the logged head output.
+
 No ROS imports.
 """
 import math
@@ -74,6 +79,7 @@ class Bore1Row:
     g: Optional[B1Gate] = None
     pred: Optional[Bore1Pred] = None
     pushed: bool = False
+    w_offset: float = 0.0               # mm added to the width handed to the controller (not to the logged w)
 
     @property
     def ok(self) -> bool:
@@ -106,7 +112,7 @@ class Bore1Row:
         if not self.ok:
             return None
         return WidthRow(self.t_frame, int(self.g.leg), float(self.g.s_tip), LAB_BACK, float(self.s_dep),
-                        float(self.pred.w), bool(self.pushed))
+                        float(self.pred.w) + self.w_offset, bool(self.pushed))
 
 
 @dataclass
@@ -132,10 +138,11 @@ class Bore1Readout:
     ``max_deg`` / ``angle_at`` are the angle cap and ``gate_log`` the semi gate log); ``head``: a head of head.py."""
 
     def __init__(self, pattern, head, sd_max: float = math.inf, drop_bad_q: bool = True, max_deg: float = 0.0,
-                 angle_at: str = "tip", gate_log=None):
+                 angle_at: str = "tip", gate_log=None, camera: str = "bore1", w_offset: float = 0.0):
         self.pat, self.head = pattern, head
         self.sd_max, self.drop_bad_q = float(sd_max), bool(drop_bad_q)
-        self.gate = make_gate(pattern, max_deg, angle_at)
+        self.camera, self.w_offset = camera, float(w_offset)
+        self.gate = make_gate(pattern, max_deg, angle_at, camera)
         self.gate_log = gate_log if getattr(pattern, "geometry", None) == "semi" else None
         self.stats = Stats()
 
@@ -150,7 +157,7 @@ class Bore1Readout:
             st.gates[why] = st.gates.get(why, 0) + 1
             return Bore1Row(int(frame_idx), float(t_frame), clock(), why)
         if self.gate_log is not None:
-            self.gate_log.row("bore1", t_frame, g)
+            self.gate_log.row(self.camera, t_frame, g)
         im = None
         if getattr(self.head, "needs_frame", True):
             im = frame() if callable(frame) else frame
@@ -161,4 +168,4 @@ class Bore1Readout:
         st.predicted += 1
         st.ms.append(p.ms)
         st.pushed += int(bool(use))
-        return Bore1Row(int(frame_idx), float(t_frame), clock(), "ok", g, p, bool(use))
+        return Bore1Row(int(frame_idx), float(t_frame), clock(), "ok", g, p, bool(use), self.w_offset)

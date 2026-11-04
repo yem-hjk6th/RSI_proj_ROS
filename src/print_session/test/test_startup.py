@@ -38,7 +38,10 @@ def test_e1_realtime_block_equals_session_meta():
     assert set(rt) == set(meta)                         # mode, cfg, rig, pattern, version, law, order, speed
     assert rt["mode"] == meta["mode"] == "closed"
     # E1 ran the single-layer pipeline: no wall stop rule fields (T12; sat_s 0 = off on a single-layer pattern)
-    assert set(rt["cfg"]) - set(meta["cfg"]) == {"sat_s", "sat_min_dz"} and rt["cfg"]["sat_s"] == 0.0
+    # nor the cage-2 fields (T15; their defaults are the E1 behaviour: ELP-B off, bore2 off)
+    assert set(rt["cfg"]) - set(meta["cfg"]) == {"sat_s", "sat_min_dz", "elp_b", "b_from_leg", "dir_win_s", "dir_vmin",
+                                                 "bore2", "bore_s_use"} and rt["cfg"]["sat_s"] == 0.0
+    assert rt["cfg"]["elp_b"] is False and rt["cfg"]["bore2"] == "off"
     assert {k: rt["cfg"][k] for k in meta["cfg"]} == meta["cfg"]
     assert rt["order"] == meta["order"] == ["bore1", "elp"]
     assert rt["speed"] == meta["speed"]
@@ -143,7 +146,8 @@ def test_no_bore1_warning_and_e1_with_bore1():
 def test_bore1_readout_plan(tmp_path):
     """T11: bore1_readout starts width_readout_bore1 with the controller's pattern; A_b1 needs it."""
     p = _plan("closed", print_session__bore1_readout=True, **B1_REPLAY)
-    assert p.bore1 == dict(pattern_json=str(p.pattern)) and p.needs_bore1 is True
+    # T15: the controller's bore_sd_max and bore1_offset_mm are handed to the node (defaults: no limit, 0 mm)
+    assert p.bore1 == dict(pattern_json=str(p.pattern), sd_max=float("inf"), w_offset=0.0) and p.needs_bore1 is True
     line = next(x for x in p.log if x.startswith("bore1 readout:"))
     assert "REPLAY head" in line and "/bore1/image_raw" in line and "frame time receive" in line
     wd = tmp_path / "w"

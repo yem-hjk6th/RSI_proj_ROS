@@ -3,6 +3,9 @@
 Each source (ELP: rows d >= 12 mm, bore1: rows at d = 5 mm) keeps the rows of the current leg. At every controller
 update `estimate` takes the newest `win_mm` of material behind s_tip - d_min, bins it at bin_mm, and turns each
 bin's median log width into a flow estimate with the v_eff the material was laid at.
+
+Cage 2: ``RowStoreB`` (legacy rt_controller.make_rowstore_b, 105-139) is the same store for a +X line: the arc length
+is s = x - b_x0[leg] and v_eff comes from ``veff_at_s(x_sign=+1)``. Same window, bins and rhat math.
 """
 import math
 from dataclasses import dataclass
@@ -82,5 +85,38 @@ class RowStore:
         lt = hist.latest()
         v_tip = max(float(lt[2]), 1.0) if lt is not None else 12.0
         s_now = pat.x_start - float(lt[1][0]) if lt is not None else s_tip
+        return Est(float(np.mean(rh)), float(np.exp(np.mean(lwb[ok]))), int(ok.sum()), float(np.mean(ve[ok])),
+                   float(sb[ok].min()), float(sb[ok].max()), s_now, (s_now - float(np.mean(sb[ok]))) / v_tip)
+
+
+class RowStoreB(RowStore):
+    """RowStore of a +X line (ELP-B, bore2): s = x - b_x0[leg], v_eff along +X."""
+
+    def estimate(self, hist, pat, cfg, leg) -> Optional[Est]:
+        if self._leg != leg or not self._s:
+            return None
+        s, lw = np.asarray(self._s), np.asarray(self._lw)
+        s_tip = self._s_tip_last
+        s_max = s_tip - self.d_min
+        if s_max < cfg.s_use:
+            return None
+        m = (s >= max(cfg.s_use, s_max - cfg.win_mm)) & (s <= s_max)
+        if not m.any():
+            return None
+        bi = np.floor(s[m] / cfg.bin_mm).astype(int)
+        ub = np.unique(bi)
+        lwb = np.array([np.median(lw[m][bi == u]) for u in ub])
+        sb = (ub + 0.5) * cfg.bin_mm
+        x0 = pat.b_x0[leg]
+        ve = hist.veff_at_s(pat.b_y_of(leg), x0, sb, x_sign=+1)
+        if ve is None:
+            return None
+        ok = np.isfinite(ve) & (ve > 0.5)
+        if not ok.any():
+            return None
+        rh = (lwb[ok] - math.log(cfg.w12_t) + cfg.alpha_m * np.log(ve[ok] / cfg.v_ref_mm_s)) / cfg.alpha_m
+        lt = hist.latest()
+        v_tip = max(float(lt[2]), 1.0) if lt is not None else 12.0
+        s_now = float(lt[1][0]) - x0 if lt is not None else s_tip
         return Est(float(np.mean(rh)), float(np.exp(np.mean(lwb[ok]))), int(ok.sum()), float(np.mean(ve[ok])),
                    float(sb[ok].min()), float(sb[ok].max()), s_now, (s_now - float(np.mean(sb[ok]))) / v_tip)

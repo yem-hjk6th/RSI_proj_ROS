@@ -1,0 +1,85 @@
+# Parameter set of the cage-2 session bduo (data/bduo_20261103_195120, 2026-11-03, closed loop on the CLp4 program,
+# bore-led on both pairs; task T15). Legacy flags (session_meta.json realtime / bore_dual):
+#   --mode closed --plan A_b1 --control-sources elp,bore1 --elp-b on --bore2 primary --bore-sd-max 0.05,
+#   MDF side pos, bore offsets 0, bore_s_use 0 (= 15 mm).
+# Derived at start-up from the pattern: V_max 30 mm/s, ov_base 40.0, ov_default 40, floor 12, window 12..100.
+# NOT RUN on hardware with this port. Weight folders and quality files are placeholders (the .pt files are not in this
+# repository; the packaged quality limits are in width_readout_bore1's share/config/bore_weights/).
+#
+# Usage: ros2 launch print_session bringup.launch.py mode:=closed params_file:=<copy of this file> cameras:=<cage file>
+cl_controller:
+  ros__parameters:
+    mode: closed
+    pattern: pattern_usr_ELP_R1v30_CLp_261022.json   # the CLp4 program has the CLp segs (data/README.md)
+    plan: A_b1
+    control_sources: elp,bore1
+    elp_b: "on"                # law B on the +X lines (required with print_session.cage2)
+    b_from_leg: 1
+    bore2: primary             # bore2 -> ELP-B -> model on the +X lines
+    bore_sd_max: 0.05          # handed to both bore readouts (sd_max)
+    bore_s_use: 0.0
+    bore1_offset_mm: 0.0       # handed to the bore1 readout (w_offset)
+    bore2_offset_mm: 0.0       # handed to the bore2 readout (w_offset)
+    step_period_s: 0.05
+
+krc_rsi_bridge:
+  ros__parameters:
+    host: 0.0.0.0              # placeholder: the edge PC's address on the KRC network
+    port: 59152                # placeholder: the port in RSI_EthernetConfig.xml
+    deadline_s: 0.004
+    rt_priority: 0
+    cpu: -1
+    ring_capacity: 8192
+    publish_period_s: 0.01
+    k_chord: 25
+
+# ELP-A (role elpA): rig_json empty = the packaged cage-2 ELP-A rig (rigs are bound by role, not by USB id)
+width_readout_elp:
+  ros__parameters:
+    camera: elp
+    state_topic: /krc/state
+    width_topic: /width/elp
+    rig_json: ""
+    root: ""
+    d_min: 12.0
+    use_header_stamp: true
+
+# ELP-B (role elpB, kind B): rig_json empty = the packaged cage-2 ELP-B rig (lat_s = the ELP-A value, not measured)
+width_readout_elp_b:
+  ros__parameters:
+    image_topic: /elp_b/image_raw
+    state_topic: /krc/state
+    rig_json: ""
+    root: ""
+    d_min: 12.0
+    use_header_stamp: true
+    b_mdf_side: pos
+
+width_readout_bore1:
+  ros__parameters:
+    camera: bore1
+    image_topic: /bore1/image_raw
+    head: torch
+    weight_dir: <BORE1_CAGE2_WEIGHT_DIR>          # deploy_bore1_cage2ft_261103/weights
+    weights: cage2
+    quality_json: <BORE1_QUALITY_JSON>            # quality_limits_cage2_raw.json
+    device: cuda
+
+width_readout_bore2:
+  ros__parameters:
+    camera: bore2
+    image_topic: /bore2/image_raw
+    head: torch
+    weight_dir: <BORE2_WEIGHT_DIR>                # deploy_bore2_cage2ft_261103/weights
+    weights: cage2
+    quality_json: <BORE2_QUALITY_JSON>            # quality_limits_bore2_live_est.json
+    device: cuda
+
+print_session:
+  ros__parameters:
+    cage2: true
+    bore1_readout: true
+    disconnect_timeout_s: 2.0
+    src_name: usr_ELP_R1v30_CLp4_261103.src
+    ceiling_light: "off"
+    krc_rsi_config: RSI_OV4

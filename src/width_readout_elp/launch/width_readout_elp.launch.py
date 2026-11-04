@@ -3,6 +3,7 @@
     ros2 launch width_readout_elp width_readout_elp.launch.py pattern_json:=pattern_usr_ELP_FAN1_261103.json \
         rig_json:=<RIG_JSON> gate_log_dir:=<SESSION_DIR>
 
+``kind:=B`` runs the ELP-B readout (set its topics: camera elp_b, /elp_b/image_raw -> /width/elp_b; ``b_mdf_side``).
 ``pattern_json``: a path, or a file name in path_geometry's patterns/ (FAN1, ARC2); empty = the packaged R1v30_CLp
 pattern. ``params_file`` (optional) is loaded first; the arguments given here override it, and arguments left empty keep
 the node's defaults.
@@ -12,7 +13,8 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-STR_ARGS = ("camera", "image_topic", "state_topic", "width_topic", "rig_json", "pattern_json", "root", "gate_log_dir")
+STR_ARGS = ("camera", "image_topic", "state_topic", "width_topic", "rig_json", "pattern_json", "root", "gate_log_dir",
+            "kind", "b_mdf_side")
 
 
 def _node(context):

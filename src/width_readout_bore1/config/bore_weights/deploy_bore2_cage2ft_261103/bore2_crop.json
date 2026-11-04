@@ -1,0 +1,15 @@
+{
+ "crop_x0_x1_y0_y1": [
+  544,
+  1120,
+  0,
+  576
+ ],
+ "frame": "1280 x 720 BGR (bore2 stream)",
+ "then": "horizontal flip (cv2.flip 1)",
+ "resize": "INTER_AREA 288 x 288",
+ "color": "BGR -> RGB",
+ "code": "proto bore1/bore2_rt.py crop288_b2 = bore1_ft t3_cache_bore2.crop2",
+ "label": "ELP-B bin median at (B line, 0.5 mm bin of s_dep = s_tip - 5), rows d >= 12",
+ "units": "ELP-B mm"
+}

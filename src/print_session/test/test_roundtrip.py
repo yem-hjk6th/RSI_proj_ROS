@@ -47,7 +47,8 @@ def test_ctrl(e1_export):
     assert list(e.columns) == CTRL_COLS
     assert list(o.columns) == CTRL_COLS[:len(o.columns)]       # E1 = realtime_cl_261022: no du_blind / t_blind
     extra = CTRL_COLS[len(o.columns):]
-    assert extra == ["du_blind", "t_blind"] and (e[extra] == "").all().all()
+    assert extra == ["du_blind", "t_blind", "law", "kind", "dir", "vx", "src_active", "src_why"]   # T15: cage 2
+    assert (e[extra] == "").all().all()
     assert _differing(o, e[list(o.columns)]) == set()
 
 

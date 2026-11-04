@@ -37,7 +37,7 @@ the port of the legacy `FanReadout` / `SemiReadout` (`legacy/realtime_cl_cage2_s
 - Semi patterns with `gate_log_dir` set: one row per gated frame in `<gate_log_dir>/semi_gate_<camera>.csv` (the legacy
   `semi_gate_<ses>.csv` columns, cam `elpA`, `s_obs` = `s_tip` as the legacy ELP rows).
 - `pattern_json` may be a file name in `path_geometry/patterns/` (`pattern_usr_ELP_FAN1_261103.json`,
-  `pattern_usr_ELP_ARC2_261103.json`). The cage-2 rigs are not packaged (out of scope of T13): give `rig_json`.
+  `pattern_usr_ELP_ARC2_261103.json`). The cage-2 rigs are packaged since T15 (`config/rig/cage2opt_elpA|B/`).
 - `PathReadout(kind="B")` is the ELP-B readout (`FanReadoutB` / `SemiReadoutB`); there is no ELP-B node yet.
 
 ```bash
@@ -79,3 +79,23 @@ bgra8, rgba8. `Width.leg` carries the pattern's leg number as in the legacy logs
   the gate on this package's ring = the path gate on the legacy ring = the live decision on every ELP-A / ELP-B frame of
   both 2026-11-03 sessions; `read` on synthetic bead images at gated tips (rows within 1e-9); `make_readout`; the gate log.
 - `test_launch_fan.py` (T13): `ros2 launch` with FAN1 by name; Width on a FAN1 line, none when moving backwards.
+
+## ELP-B (cage 2, T15)
+
+`kind: B` runs the ELP-B readout (`readout.RtReadoutB`, the port of the legacy `RtReadoutB` of
+`legacy/realtime_cl_cage2_semi_261103/rt_readout.py`) on the +X lines, as a second node of this package
+(`width_readout_elp_b`, example `config/width_readout_elp_b.yaml`: `camera: elp_b`, `/elp_b/image_raw` -> `/width/elp_b`).
+
+- B lines: the segs rows of kind B with x1 > x0; each carries the number of the A leg printed before it.
+- Gate at `t_frame - lat_s`: `stale`, `no_track`, `z_or_dir` (|z - z_cmd| > 0.5 or +X motion < 0.3 mm in 0.1 s),
+  `leg_or_xwin` (no B line within 1 mm, or x outside `x_window`), `min_s_tip` (s_tip = x - the line's first x).
+- Grid behind the tip on the +X side (x = tip - d); MDF reference from one half of the band, `b_mdf_side` (`pos`
+  default: the A leg printed 9 mm before the B line lies in the -n half; `both`, `neg`). Fan / semi patterns: the path
+  readout of kind B.
+- Rigs are bound to the camera role, not to a USB instance id: `config/rig/cage2opt_elpA/` and `cage2opt_elpB/` are byte
+  copies of the legacy rigs. Kind B without `rig_json` uses the ELP-B rig; a rig whose file name carries the other role
+  is refused. The ELP-B rig's `lat_s` 0.057 s is the ELP-A value (the ELP-B latency was not measured).
+- Refused: kind B on a pattern without B lines, kind B on `/width/elp` or kind A on `/width/elp_b`, an unknown kind or
+  MDF side.
+- Tests (`test/test_elp_b.py`): every frame of the ELP-B log of session bduo_20261103_195120, port = legacy offline and
+  legacy = live; reads on synthetic images equal the legacy rows.

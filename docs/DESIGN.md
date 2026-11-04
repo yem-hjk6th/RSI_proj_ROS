@@ -44,17 +44,18 @@ run on hardware. **planned** = not in the repository yet.
 | `krc_interfaces` | ament_cmake | – | Messages (§5) | implemented |
 | `krc_rsi_bridge` | ament_python | `rsi_proc.py`, `rsi_ov_listener.py`, `rsi_ring.py` | RSI UDP server in its own process. Publishes `KrcState` and `ReplyRecord`, subscribes to `OverrideCmd`. Clamps, floor, heartbeat watchdog and fallback ramp live here. | implemented |
 | `krc_sim` | ament_python | `replay_smoke.py`, `harness_run_cl.py` | Fake KR C4 RSI client: 4 ms packets, kinematics along a pattern (wall programs: every layer, at the planned Z), obeys the override, counts late replies like the controller. Also replays `rsi_data_*.csv`. | implemented |
-| `cl_controller` | ament_python | `rt_controller.py`, `rt_law_v3.py`; walls: `realtime_cl_261023_ml/` | Control law as a pure library, plus a node: `Width` + `KrcState` → `OverrideCmd`; `CtrlRecord` after every update. Wall programs `W4L28_*`: layer-aware legs and window, `control_sources`, the wall stop rule (`sat_stop_s`) | implemented (walls: synthetic tests only) |
-| `width_readout_elp` | ament_python | `rt_readout.py`, `rig/`, `pattern/`; walls: `realtime_cl_261023_ml/rt_readout.py` | ELP chroma-edge width readout: image + `KrcState` → `Width`. Wall programs: the gate takes the layer's leg, the readout plane is lifted by its offset | implemented (walls: synthetic tests only) |
+| `cl_controller` | ament_python | `rt_controller.py`, `rt_law_v3.py`; walls: `realtime_cl_261023_ml/`; cage 2: `realtime_cl_cage2_semi_261103/` | Control law as a pure library, plus a node: `Width` + `KrcState` → `OverrideCmd`; `CtrlRecord` after every update. Wall programs `W4L28_*`: layer-aware legs and window, `control_sources`, the wall stop rule (`sat_stop_s`). Cage 2 (`elp_b`, `bore2`): law A on the −X legs, law B on the +X lines (bore2 → ELP-B → model), u carried across each handover, `SwitchRecord` per source change. Fan / semicircle patterns refused (T16) | implemented (walls: synthetic tests only; cage 2: replay of session bduo) |
+| `width_readout_elp` | ament_python | `rt_readout.py`, `rig/`, `pattern/`; walls: `realtime_cl_261023_ml/rt_readout.py`; cage 2: `RtReadoutB` | ELP chroma-edge width readout: image + `KrcState` → `Width`. Wall programs: the gate takes the layer's leg, the readout plane is lifted by its offset. `kind: B` = ELP-B on the +X lines (second node `width_readout_elp_b`, `/width/elp_b`); rigs bound to the role | implemented (walls: synthetic tests only; ELP-B: gate on session bduo, reads on synthetic images) |
 | `krc_eki_bridge` | ament_python | – | Same topics as the RSI bridge, over EthernetKRL TCP. KRL/XML templates marked NOT RUN. | implemented (templates NOT RUN) |
 | `krc_replay` | ament_python | – | End-to-end replay of a logged session through the ROS graph: `log_player` node (lock-step and real-time), equivalence and safety tests. Also the RSI link latency test (`latency_test` CLI, `latency_bridge.launch.py`). | implemented |
-| `print_session` | ament_python | `run_cl.py` | Session lifecycle: one bringup launch with the start-up checks and refusals of `run_cl.py`, `session_meta.json`, rosbag2 recording (mcap) of the record topics, `bag_to_legacy` export to the legacy CSV logs. Warns at start-up in shadow mode (no OvCmd: 1 % on `RSI_OV4`). | implemented |
+| `print_session` | ament_python | `run_cl.py` | Session lifecycle: one bringup launch with the start-up checks and refusals of `run_cl.py`, `session_meta.json`, rosbag2 recording (mcap) of the record topics, `bag_to_legacy` export to the legacy CSV logs. Warns at start-up in shadow mode (no OvCmd: 1 % on `RSI_OV4`). `cage2: true` also starts the ELP-B and bore2 readouts | implemented |
 | `camera_capture` | ament_python | `pipeline_cage1012/elp.py`, `borescope.py`, `realtime_cl_261023/elp_hevc.py` | One node per camera (V4L2 by a stable device path, controls read back), recording in the same process (ELP: HEVC via `ffmpeg` `hevc_nvenc`, MJPG AVI fallback; borescopes: mp4v) with the legacy frame CSVs; image topics with capture-time stamps, 5 Hz previews, a 2×2 preview window | implemented (not run with a camera) |
-| `width_readout_bore1` | ament_python | `bore1/bore1_rt.py`, `bore1/bore1_head.py` | bore1 readout: image + `KrcState` → `Width` and `Bore1Record`. Gate on the RSI track, head `torch` (the GPU head; weights are not in this repository, sha256 checked against a committed list) or `replay` (logged head outputs; CI) | implemented (not run with the weights or a GPU) |
+| `width_readout_bore1` | ament_python | `bore1/bore1_rt.py`, `bore1/bore1_head.py`; cage 2: `bore1/bore2_rt.py` | bore1 readout: image + `KrcState` → `Width` and `Bore1Record`. Gate on the RSI track, head `torch` (the GPU head; weights are not in this repository, sha256 checked against a committed list) or `replay` (logged head outputs; CI). `camera: bore2` = the bore2 readout (+X lines, bore2 crop; second node `width_readout_bore2`, `/width/bore2`) | implemented (not run with the weights or a GPU) |
 
 ## 5. Interfaces (contract; change only through a PR to `krc_interfaces`)
 
-All six messages are implemented. `Bore1Record` was added by T11 (#27).
+All seven messages are implemented. `Bore1Record` was added by T11 (#27), `SwitchRecord` and the cage-2 fields of
+`CtrlRecord` by T15 (#38).
 
 **`KrcState.msg`**: one per RSI packet.
 - `builtin_interfaces/Time stamp` (PC receive time)
@@ -70,7 +71,7 @@ All six messages are implemented. `Bore1Record` was added by T11 (#27).
 **`OverrideCmd.msg`**:
 - `builtin_interfaces/Time stamp`
 - `int32 value_pct`
-- `string source` (`elp`, `bore1`, `model`, `forced`, `default`)
+- `string source` (`elp`, `bore1`, `model`, `forced`, `default`; cage 2, law B: `elp_b`, `bore2`, `model`)
 - `uint64 seq`
 
 **`Width.msg`**:
@@ -99,8 +100,14 @@ sent. A row of the legacy `ov_cmd_<ses>.csv`, plus the packet fields `KrcState` 
 row of the legacy `ctrl_<ses>.csv` (`CTRL_COLS` of `run_cl.py`, same names and order), unrounded; NaN or -1 where the
 legacy log has an empty cell. Among its fields: `stamp`, `t_perf` (same clock as `ReplyRecord.pc_ts_perf`), `n_upd`,
 `win`, `leg`, `s_tip`, `w_est`, `ov_raw`, `ov_pub` (the value handed to the bridge), `src`, `plan`, `state`, the
-per-source validity and lag, the law terms (`e`, `du`, `u`, `lnk_*`) and the counters `n_corr`, `n_switch`. The full
-list is in `src/krc_interfaces/msg/CtrlRecord.msg`.
+per-source validity and lag, the law terms (`e`, `du`, `u`, `lnk_*`) and the counters `n_corr`, `n_switch`; cage 2
+(T15): `law` (A / B), `kind`, `dir`, `vx`, `src_active`, `src_why`. On a law B row the `*_elp` fields are ELP-B's and
+the `*_b1` fields bore2's. The full list is in `src/krc_interfaces/msg/CtrlRecord.msg`.
+
+**`SwitchRecord.msg`** (T15): one per change of the controller's effective source (`elpA`, `bore1`, `model_A`, `elpB`,
+`bore2`, `model_B`, `hold`, `outside`), published by `cl_controller`. A row of the legacy `switch_<ses>.csv`
+(`SWITCH_COLS`, `from` / `to` named `from_label` / `to_label`): `stamp` (update time), `t_perf`, the labels, `leg`,
+`kind`, `dir`, `vx`, `x`, `y`, `z`, `s`, `u`, `ov_cmd`, `why`.
 
 **`Bore1Record.msg`**: one per bore1 frame processed by `width_readout_bore1`, also when the gate rejects it. A row
 of the legacy `bore1_rt_<ses>.csv` (`B1_COLS` of `bore1/bore1_rt.py`, same names and order; `t_frame` is the
@@ -116,14 +123,17 @@ clock as `ReplyRecord.pc_ts_perf`), `gate`, `leg`, `s_tip`, `s_dep`, `x`, `y`, `
 | `/krc/override_cmd` | `OverrideCmd` | `cl_controller` | implemented |
 | `/krc/reply_record` | `ReplyRecord` | `krc_rsi_bridge` | implemented |
 | `/controller/ctrl_record` | `CtrlRecord` | `cl_controller` | implemented |
+| `/controller/switch_record` | `SwitchRecord` | `cl_controller` | implemented (T15) |
 | `/width/elp` | `Width` | `width_readout_elp`, `log_player` | implemented |
 | `/width/bore1` | `Width` | `width_readout_bore1`, `log_player` | implemented (not run with the weights) |
 | `/width/bore1/record` | `Bore1Record` | `width_readout_bore1` | implemented (not run with the weights) |
+| `/width/elp_b` | `Width` | `width_readout_elp` (kind B, node `width_readout_elp_b`) | implemented (T15; not run with a camera) |
+| `/width/bore2`, `/width/bore2/record` | `Width`, `Bore1Record` | `width_readout_bore1` (camera bore2, node `width_readout_bore2`) | implemented (T15; not run with the weights) |
 | `/<camera>/image_raw` | `sensor_msgs/Image` (`bgr8`, stamp = capture time on the clock of `KrcState.stamp`) | `camera_capture` (`/elp/image_raw`, `/bore1/image_raw`, ...) | implemented |
 | `/<camera>/preview` | `sensor_msgs/Image` (5 Hz, 640 px wide) | `camera_capture` | implemented |
 
-`print_session` records `/krc/state`, `/krc/override_cmd`, `/krc/reply_record`, `/controller/ctrl_record` and
-`/width/*` (`/width/bore1/record` included). Images are not in the bag: the camera nodes record the video and the frame CSVs to
+`print_session` records `/krc/state`, `/krc/override_cmd`, `/krc/reply_record`, `/controller/ctrl_record`,
+`/controller/switch_record` and `/width/*` (`/width/bore1/record`, `/width/elp_b`, `/width/bore2*` included). Images are not in the bag: the camera nodes record the video and the frame CSVs to
 `<session>/raw_video/` in the legacy formats.
 
 ## 6. Safety invariants
@@ -148,6 +158,10 @@ controller:** its reply carries no OvCmd, and the lab's print programs load `RSI
 - **Walls** (T12; no wall session is logged): the legacy `realtime_cl_261023_ml` modules and the port closed loop on the
   same `krc_sim` run of `W4L28_CL` with synthetic widths (gate decisions, legs, layer offsets, override sequence), and
   the wall stop rule (`cl_controller` `test_walls_*.py`, `width_readout_elp` `test_walls.py`).
+- **Cage 2** (T15) on `data/bduo_20261103_195120/`: the ELP-B and bore2 gates (port = legacy offline, legacy = live), the
+  controller replay of the logged rows (port = legacy per update, step, packet and switch; the legacy replay against the
+  live ctrl / switch / ov_cmd logs, every difference explained), the start refusals, and law B under the same clamp,
+  floor, watchdog ramp and forced latch as law A.
 - **Timing tests** on `krc_sim`: reply latency distribution, and late-reply counting with a 100-packet timeout.
 - **Replay** (`krc_replay`): lock-step equivalence of the nodes with the library ports, and the real-time chain on a
   slice of E1, with a heartbeat-loss case.

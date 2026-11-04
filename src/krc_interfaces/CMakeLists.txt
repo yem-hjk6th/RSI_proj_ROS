@@ -11,6 +11,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CtrlRecord.msg"
   "msg/OverrideCmd.msg"
   "msg/ReplyRecord.msg"
+  "msg/SwitchRecord.msg"
   "msg/Width.msg"
   DEPENDENCIES builtin_interfaces
 )

@@ -18,6 +18,21 @@ z_off column: the leg / on-A test takes the nearest planned layer (Pattern.leg_a
 opens on layer 1 and closes only at the planned last Z (Pattern.last_z), and the wall stop rule (sat_s > 0): on a
 seen leg of layer >= 2 (planned offset >= sat_min_dz), OvCmd from the feedback (plan not Bpp) at ov_max for sat_s in
 a row latches forced open loop like the speed check (sat_alarm).
+
+Cage 2 (legacy/realtime_cl_cage2_semi_261103/rt_controller.py; T15), active only with CtrlCfg.elp_b:
+- every update takes the motion direction (sign of vx over dir_win_s, |vx| < dir_vmin = none) and the line under the
+  newest packet (A leg / B line within 1 mm in y, on z_cmd, inside x_window) (`_where2`);
+- `_slot`: -X on an A leg >= 1 -> law A (the plan's order, e.g. A_b1: bore1 -> ELP-A -> model); +X on a B line
+  >= b_from_leg -> law B; anything else (connectors, hops, turns, stops, mismatches, leg 0) -> hold (law A's blind
+  update, u unchanged). u is handed from one law to the other at each switch, so it is continuous;
+- law B: its own Law on the +X lines. bore2 off: ELP-B -> model (sources elp, G4 off); fallback: ELP-B -> bore2 ->
+  model; primary: bore2 -> ELP-B -> model (sources elp,bore1, G4 on). Law B keeps the Law source names: its "elp"
+  slot is ELP-B (RowStoreB "elp_b") and its "bore1" slot is bore2 (RowStoreB "bore2"). blind_tau 0, target const,
+  no force_seg. Law B does not read control_sources (legacy behaviour, kept);
+- every change of the effective source (elpA, bore1, elpB, bore2, model_A, model_B, hold, outside) is a switch record
+  (`switches`, `on_switch`). With elp_b off the labels are bookkeeping only (the legacy cage-2 code logs them too).
+OvCmd of law B goes through the same command(): the same ov_from_logk clamp and floor, and the bridge applies the same
+watchdog ramp and forced latch, whatever law holds u.
 """
 import logging
 import math
@@ -29,7 +44,7 @@ import numpy as np
 from .history import StateHistory
 from .law import EstLite, Law, LawCfg
 from .pattern import Pattern, pattern_speed_info, plateaus_at_ov, plateaus_from_segs
-from .rowstore import RowStore
+from .rowstore import RowStore, RowStoreB
 
 log = logging.getLogger("cl_controller")
 
@@ -72,6 +87,19 @@ class CtrlCfg:
     speed_legs: int = 2
     sat_s: float = 0.0          # wall stop rule: s at ov_max on a seen leg of layer >= 2 -> forced open loop; 0 = off
     sat_min_dz: float = 0.6     # mm, planned offset from which a leg counts as layer >= 2 (layer 1: 0 / +0.20)
+    # cage 2 (T15): ELP-B / bore2 on the +X lines (module docstring)
+    elp_b: bool = False         # False = +X lines held (u unchanged), the behaviour before cage 2
+    b_from_leg: int = 1         # first B line under control (leg number of the A leg before it)
+    dir_win_s: float = 0.1      # s, window of the X velocity that gives the motion direction
+    dir_vmin: float = 2.0       # mm/s; |vx| below this = no X direction
+    bore2: str = "off"          # off | fallback | primary (law B's use of bore2; needs elp_b)
+    bore_s_use: float = 0.0     # mm, first usable s_dep of the bore rows (bore1 and bore2); <= 0 = s_use
+
+
+BORE2_MODES = ("off", "fallback", "primary")
+SWITCH_LABELS_A = {"elp": "elpA", "bore1": "bore1"}         # else model_A
+SWITCH_LABELS_B = {"elp": "elpB", "bore1": "bore2"}         # else model_B
+SOURCE_B = {"elp": "elp_b", "bore1": "bore2", "model": "model"}   # OverrideCmd.source of law B's states
 
 
 def ov_from_logk(cfg: CtrlCfg, logk: float) -> int:
@@ -209,7 +237,8 @@ class Controller:
         self.law_cfg.v_ref_mm_s = cfg.v_ref_mm_s
         self.law = Law(self.law_cfg, plateaus or {})
         self.st = {"elp": RowStore("elp", cfg.d_min), "bore1": RowStore("bore1", cfg.b1_d)}
-        self._cfg_src = {"elp": cfg, "bore1": replace(cfg, win_mm=cfg.b1_win_mm)}
+        b_use = cfg.bore_s_use if cfg.bore_s_use > 0 else cfg.s_use
+        self._cfg_src = {"elp": cfg, "bore1": replace(cfg, win_mm=cfg.b1_win_mm, s_use=b_use)}
         self.last_rows_now = -math.inf
         self.out_ov, self.out_src = cfg.ov_default, "default"
         self.heartbeat: Optional[float] = None
@@ -229,6 +258,37 @@ class Controller:
         self.speed_alarm = False
         self._sat_t0: Optional[float] = None    # start of the current stretch at ov_max (wall stop rule)
         self.sat_alarm = False                  # the wall stop rule latched forced open loop
+        # cage 2: law B and the handover state
+        self.law_b: Optional[Law] = None
+        self.act = "A"                          # the law that holds u: "A" | "B"
+        self.src_active, self.src_why = "none", "start"
+        self.switches: list = []                # switch records (dicts), also handed to on_switch
+        self.on_switch = None
+        self.where: dict = {}                   # the last update's direction / line (_where2)
+        if cfg.bore2 not in BORE2_MODES:
+            raise Refused(f"bore2 {cfg.bore2!r}: off | fallback | primary")
+        if cfg.bore2 != "off" and not cfg.elp_b:
+            raise Refused("bore2 needs elp_b (law B)")
+        if cfg.elp_b:
+            if cfg.bore2 == "off":
+                lcb = replace(self.law_cfg, primary="elp", sources="elp", force_seg={}, blind_tau=0.0, guard_bed=False,
+                              tgt_schedule="const")
+            else:
+                lcb = replace(self.law_cfg, primary="bore1" if cfg.bore2 == "primary" else "elp", sources="elp,bore1",
+                              force_seg={}, blind_tau=0.0, guard_bed=True, tgt_schedule="const")
+            self.law_b = Law(lcb, {})
+            self.st["elp_b"] = RowStoreB("elp_b", cfg.d_min)
+            self._cfg_src["elp_b"] = cfg
+            self._est_full["elp_b"] = None
+            if cfg.bore2 != "off":
+                self.st["bore2"] = RowStoreB("bore2", cfg.b1_d)
+                self._cfg_src["bore2"] = replace(cfg, win_mm=cfg.b1_win_mm, s_use=b_use)
+                self._est_full["bore2"] = None
+
+    @property
+    def law_act(self) -> Law:
+        """The law that holds u now (law A unless law B controls a +X line)."""
+        return self.law_b if (self.act == "B" and self.law_b is not None) else self.law
 
     # ---------------------------------------------------------------- inputs
     def push_state(self, t: float, ipoc: float, xyz, v_eff: Optional[float] = None) -> str:
@@ -237,8 +297,15 @@ class Controller:
         return self.win.update(t, xyz)
 
     def push_rows(self, src: str, leg: int, s_tip: float, d, s, w, now: float) -> None:
-        """One readout of `src` ("elp" | "bore1"): rows d, s_dep, w (arrays) at tip position s_tip on `leg`."""
-        self.st[src].push(leg, s_tip, d, s, w, now)
+        """One readout of `src` ("elp" | "bore1" | "elp_b" | "bore2"): rows d, s_dep, w (arrays) at tip position s_tip
+        on `leg`. elp_b rows are ignored unless elp_b is on, bore2 rows unless bore2 is fallback / primary (legacy
+        push_rows_b / push_bore2)."""
+        st = self.st.get(src)
+        if st is None:
+            if src in ("elp_b", "bore2"):
+                return
+            raise KeyError(src)
+        st.push(leg, s_tip, d, s, w, now)
         if src == "elp":
             self.last_rows_now = now
 
@@ -289,6 +356,8 @@ class Controller:
         if self.force_default:
             return "forced"
         if self.out_src == "control":
+            if self.act == "B" and self.law_b is not None:
+                return SOURCE_B.get(self.law_b.state, self.law_b.state)
             return self.law.state
         return "default"
 
@@ -384,7 +453,9 @@ class Controller:
         lk_ol = self.law.lnk_ol(leg)
         self.info["lnk_ff"], self.info["lnk_tgt"], self.info["lnk_ol"] = lk_ff, lk_tgt, lk_ol
         self.info["w_target"] = self.law.w_target(on_a, leg, s_eff)
-        self.out_ov, self.out_src = ov_from_logk(self.cfg, lk_ff + lk_tgt + lk_ol + self.law.u), "control"
+        # u of the law that holds it (law A's u unless law B controls a +X line). On a +X line on_a is False, so
+        # ln k_ff = ln k_tgt = 0 and ln k_ol is the nearest A leg's (legacy)
+        self.out_ov, self.out_src = ov_from_logk(self.cfg, lk_ff + lk_tgt + lk_ol + self.law_act.u), "control"
 
     def _estimate(self, src: str, leg: int, now: float) -> Optional[EstLite]:
         st = self.st[src]
@@ -395,8 +466,10 @@ class Controller:
         return EstLite(e.rhat, e.nb, e.s_lo, e.s_hi, e.lag_s, now - st.last_rows_now)
 
     def update(self, now: float) -> None:
-        """One law update (legacy Controller._update) followed by command()."""
+        """One law update (legacy Controller._update) followed by command(). elp_b: the A / B handover (_update_ab)."""
         cfg = self.cfg
+        if cfg.elp_b:
+            return self._update_ab(now)
         lt = self.hist.latest()
         if lt is None:
             return
@@ -404,6 +477,7 @@ class Controller:
         if self.win.state != "inside":
             self.out_ov, self.out_src = cfg.ov_outside, "outside"
             self.info.update(leg=-1, on_a=False, row={})
+            self._set_source(now, "outside", "print window not open", None)
             return
         leg, on_a, s_tip, v = self._where()
         est = {"elp": None, "bore1": None}
@@ -423,25 +497,168 @@ class Controller:
                          veff=f_ctl.veff if (e_ctl and f_ctl) else float("nan"),
                          w_est=f_ctl.w_est if (e_ctl and f_ctl) else float("nan"))
         self.command()
+        # bookkeeping only (elp_b off): the effective source label for the record and the switch log
+        if not on_a:
+            self._set_source(now, "hold", "not on an A leg (261023: +X lines unseen, u held)", None)   # legacy text
+        else:
+            self._set_source(now, SWITCH_LABELS_A.get(row["state"], "model_A"), f"A leg {leg}: {row['reason']}", leg)
+
+    # ---------------------------------------------------------------- cage 2: handover A <-> B
+    def _where2(self) -> Optional[dict]:
+        """Direction and line kind under the newest RSI packet (legacy _where2)."""
+        lt = self.hist.latest()
+        if lt is None:
+            return None
+        t, P, v = lt
+        pat, cfg = self.pat, self.cfg
+        tr = self.hist.track_at(np.array([t - cfg.dir_win_s, t]))
+        vx = float(tr[1][0] - tr[0][0]) / cfg.dir_win_s if tr is not None else 0.0
+        d = "-X" if vx < -cfg.dir_vmin else ("+X" if vx > cfg.dir_vmin else "0")
+        onz = cfg.window_ignore_z or abs(P[2] - pat.z_cmd(P[0])) < cfg.z_tol
+        inx = pat.xwin[0] <= P[0] <= pat.xwin[1]
+        a_leg, dy = pat.leg_at(P[1])
+        b_leg, bdy = pat.b_line_at(P[1])
+        if dy <= 1.0 and onz and inx:
+            kind, leg, s = "A", a_leg, pat.x_start - P[0]
+        elif bdy <= 1.0 and onz and inx:
+            kind, leg, s = "B", b_leg, P[0] - pat.b_x0[b_leg]
+        else:
+            kind, leg, s = "-", -1, float("nan")
+        return dict(t=t, x=float(P[0]), y=float(P[1]), z=float(P[2]), v=float(v), vx=vx, dir=d, kind=kind, leg=leg,
+                    s=float(s), a_leg=a_leg, s_a=float(pat.x_start - P[0]), on_z=bool(onz))
+
+    def _slot(self, w: dict) -> Tuple[str, str]:
+        """("A" | "B" | "hold", why) from direction x kind (legacy _slot)."""
+        k, leg, d = w["kind"], w["leg"], w["dir"]
+        if k == "A":
+            if leg < 1:
+                return "hold", f"A leg {leg} (lead-in, not controlled)"
+            if d == "-X":
+                return "A", f"dir -X on A leg {leg}"
+            return "hold", f"A leg {leg} but dir {d} ({'corner / stop' if d == '0' else 'direction / kind mismatch'})"
+        if k == "B":
+            if self.law_b is None:
+                return "hold", f"B line {leg}: ELP-B off"
+            if leg < self.cfg.b_from_leg:
+                return "hold", f"B line {leg} < b_from_leg {self.cfg.b_from_leg} (not controlled)"
+            if d == "+X":
+                return "B", f"dir +X on B line {leg}"
+            return "hold", f"B line {leg} but dir {d} ({'corner / stop' if d == '0' else 'direction / kind mismatch'})"
+        if not w["on_z"]:
+            return "hold", f"off the print plane (hop / lift), dir {d}"
+        return "hold", f"connector / hop / turn (dir {d}, x {w['x']:.1f} y {w['y']:.1f})"
+
+    def _set_source(self, now: float, label: str, why: str, leg) -> None:
+        """Record the effective source; a change is a switch record (also handed to on_switch)."""
+        self.src_why = why
+        if label == self.src_active:
+            return
+        w = self.where if self.where else (self._where2() or {})
+        ev = dict(t=now, frm=self.src_active, to=label, why=why, leg=leg if leg is not None else w.get("leg", -1),
+                  kind=w.get("kind", ""), dir=w.get("dir", ""), x=w.get("x", float("nan")),
+                  y=w.get("y", float("nan")), z=w.get("z", float("nan")), s=w.get("s", float("nan")),
+                  vx=w.get("vx", float("nan")), u=self.law_act.u, ov=self.out_ov)
+        self.src_active = label
+        self.switches.append(ev)
+        if self.on_switch is not None:
+            try:
+                self.on_switch(ev)
+            except Exception:  # noqa: BLE001 - logging must never stop the controller
+                log.exception("on_switch failed")
+
+    def _update_ab(self, now: float) -> None:
+        """One update with ELP-B on (legacy _update_ab): law A on -X legs, law B on +X lines, hold elsewhere."""
+        cfg = self.cfg
+        lt = self.hist.latest()
+        if lt is None:
+            return
+        self.n_updates += 1
+        if self.win.state != "inside":
+            self.out_ov, self.out_src = cfg.ov_outside, "outside"
+            self.info.update(leg=-1, on_a=False, row={}, kind="-", law="A")
+            self.where = {}
+            self._set_source(now, "outside", "print window not open", None)
+            return
+        w = self._where2()
+        self.where = w
+        slot, why = self._slot(w)
+        est = {"elp": None, "bore1": None}
+        self._est_full = {"elp": None, "bore1": None, "elp_b": None}
+        none = {"elp": None, "bore1": None}
+        if slot == "B":
+            if self.law.on_a_prev:              # leaving an A leg straight onto a B line: law A's blind step first
+                self.law.update(now, w["a_leg"], False, w["s_a"], w["v"], none)
+            if self.act != "B":                 # handover: u carried from law A
+                self.law_b.u = self.law.u
+                self.act = "B"
+            try:
+                est["elp"] = self._estimate("elp_b", w["leg"], now)
+            except Exception:  # noqa: BLE001 - a broken source is an invalid source, not a dead controller
+                log.exception("elp_b estimate failed")
+            self._est_full["elp"] = self._est_full.get("elp_b")
+            if "bore2" in self.st:              # bore2 in law B's "bore1" slot
+                try:
+                    est["bore1"] = self._estimate("bore2", w["leg"], now)
+                except Exception:  # noqa: BLE001
+                    log.exception("bore2 estimate failed")
+                self._est_full["bore1"] = self._est_full.get("bore2")
+            row = self.law_b.update(now, w["leg"], True, w["s"], w["v"], est)
+            self.law.t_last_a = now             # law A's leg-start relaxation counts from the last watched line
+            law, leg, on_a, s_tip = self.law_b, w["leg"], False, w["s"]
+        else:
+            if self.law_b.on_a_prev:            # leaving a B line: law B's blind step
+                self.law_b.update(now, -1, False, w["s"], w["v"], none)
+            if self.act == "B":                 # handover back: u carried to law A
+                self.law.u = self.law_b.u
+                self.act = "A"
+            on_a = slot == "A"
+            if on_a:
+                for src in ("elp", "bore1"):
+                    try:
+                        est[src] = self._estimate(src, w["leg"], now)
+                    except Exception:  # noqa: BLE001
+                        log.exception("%s estimate failed", src)
+            row = self.law.update(now, w["a_leg"], on_a, w["s_a"], w["v"], est)
+            law, leg, s_tip = self.law, w["a_leg"], w["s_a"]
+        self.have_est = True
+        e_ctl = est.get(law.state) if law.state in est else None
+        f_ctl = self._est_full.get(law.state)
+        self.info.update(leg=leg if (on_a or slot == "B") else -1, on_a=on_a, s_tip=s_tip, v_tip=w["v"], row=row,
+                         rhat=e_ctl.rhat if e_ctl else float("nan"), n_bins=e_ctl.nb if e_ctl else 0,
+                         veff=f_ctl.veff if (e_ctl and f_ctl) else float("nan"),
+                         w_est=f_ctl.w_est if (e_ctl and f_ctl) else float("nan"),
+                         kind=w["kind"] if slot != "hold" else "-", law=self.act)
+        self.command()
+        if slot == "hold":
+            self._set_source(now, "hold", why, None)
+        elif slot == "A":
+            self._set_source(now, SWITCH_LABELS_A.get(row["state"], "model_A"), f"{why}: {row['reason']}", leg)
+        else:
+            self._set_source(now, SWITCH_LABELS_B.get(row["state"], "model_B"), f"{why}: {row['reason']}", leg)
 
     def log_row(self, now: float) -> dict:
-        """The legacy ctrl_<ses>.csv columns this controller can fill (after an update)."""
-        i, L = self.info, self.law
+        """The legacy ctrl_<ses>.csv columns this controller can fill (after an update). u / slow are those of the law
+        that holds u, n_corr / n_switch the sum of both laws (legacy cage-2 log_update)."""
+        i, L, A, B = self.info, self.law_act, self.law, self.law_b
         r = i.get("row") or {}
         logk = i.get("lnk_ff", 0.0) + i.get("lnk_tgt", 0.0) + i.get("lnk_ol", 0.0) + L.u
         k = math.exp(logk)
         raw = self.cfg.ov_base * k
+        w = self.where or {}
         return dict(t_perf=now, n_upd=self.n_updates, win=self.win.state, leg=i["leg"], on_a=int(bool(i["on_a"])),
                     s_tip=i["s_tip"], n_bins=i["n_bins"], veff=i["veff"], w_est=i["w_est"], rhat=i["rhat"],
                     logk=logk, slow=L.slow, have_est=int(self.have_est), k=k, ov_raw=raw,
                     ov_round=int(round(raw)), ov_pub=self.published_ov(), src=self.out_src,
-                    rows_age_s=now - self.last_rows_now, forced=int(self.force_default), plan=L.cfg.plan,
+                    rows_age_s=now - self.last_rows_now, forced=int(self.force_default), plan=A.cfg.plan,
                     state=r.get("state", ""), reason=r.get("reason", ""), gate=r.get("gate", ""),
                     valid_elp=r.get("valid_elp", ""), why_elp=r.get("why_elp", ""),
                     rhat_elp=r.get("rhat_elp", math.nan), lag_elp=r.get("lag_elp", math.nan),
                     valid_b1=r.get("valid_bore1", ""), why_b1=r.get("why_bore1", ""),
                     rhat_b1=r.get("rhat_bore1", math.nan), lag_b1=r.get("lag_bore1", math.nan),
                     e=r.get("e", math.nan), du=r.get("du", math.nan), u=L.u, lnk_ff=i.get("lnk_ff"),
-                    v_tip=i.get("v_tip"), n_corr=L.n_corr, n_switch=L.n_switch,
+                    v_tip=i.get("v_tip"), n_corr=A.n_corr + (B.n_corr if B else 0),
+                    n_switch=A.n_switch + (B.n_switch if B else 0),
                     w_target=r.get("w_target", math.nan), lnk_tgt=i.get("lnk_tgt"),
-                    nobed_s=r.get("nobed_s", math.nan), hold_bed=r.get("hold_bed", ""), lnk_ol=i.get("lnk_ol"))
+                    nobed_s=r.get("nobed_s", math.nan), hold_bed=r.get("hold_bed", ""), lnk_ol=i.get("lnk_ol"),
+                    law=i.get("law", "A"), kind=i.get("kind", ""), dir=w.get("dir", ""), vx=w.get("vx", math.nan),
+                    src_active=self.src_active, src_why=self.src_why)

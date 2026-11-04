@@ -12,3 +12,5 @@ width_readout_elp:
     d_min: 12.0
     use_header_stamp: true
     gate_log_dir: ""          # fan / semi patterns: semi gate log folder (semi only; empty = no log)
+    kind: A                   # A = ELP-A on the -X legs; B = ELP-B on the +X lines (cage 2, see width_readout_elp_b.yaml)
+    b_mdf_side: pos           # kind B: MDF reference half (pos | both | neg)

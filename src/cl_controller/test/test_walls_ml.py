@@ -64,9 +64,18 @@ def test_pattern_matches_legacy_ml(pj):
 
 
 def test_config_fields_are_the_legacy_ml_ones():
+    """The port's fields are the _ml ones, followed by the cage-2 CtrlCfg fields (T15; legacy cage-2 defaults)."""
+    with legacy_import.cage2() as C:
+        c2 = {f.name: f.default for f in dataclasses.fields(C["rt_controller"].CtrlCfg)}
     with legacy_import.ml() as L:
         for port_cls, leg_cls in ((CtrlCfg, L["rt_controller"].CtrlCfg), (LawCfg, L["rt_law_v3"].LawCfg)):
             a, b = dataclasses.fields(port_cls), dataclasses.fields(leg_cls)
+            if port_cls is CtrlCfg:
+                extra = a[len(b):]
+                assert [f.name for f in extra] == ["elp_b", "b_from_leg", "dir_win_s", "dir_vmin", "bore2",
+                                                   "bore_s_use"]
+                assert all(f.default == c2[f.name] for f in extra)
+                a = a[:len(b)]
             assert [f.name for f in a] == [f.name for f in b]
             for f, g in zip(a, b):
                 fd = f.default_factory() if f.default is dataclasses.MISSING else f.default
@@ -201,7 +210,8 @@ def test_where_takes_the_layer_leg_like_legacy_ml(y, dz, vx, want):
     c = Controller(cfg, pat, lc, pl)
     with legacy_import.ml() as L:
         q = L["rt_readout"].Pattern(WALL_CL, WALL_CL.parent)
-        lcfg = L["rt_controller"].CtrlCfg(**{f.name: getattr(cfg, f.name) for f in dataclasses.fields(cfg)})
+        lcc = L["rt_controller"].CtrlCfg
+        lcfg = lcc(**{f.name: getattr(cfg, f.name) for f in dataclasses.fields(cfg) if f.name in lcc.__dataclass_fields__})
         llc = L["rt_law_v3"].LawCfg(**{f.name: getattr(lc, f.name) for f in dataclasses.fields(lc)})
         lgc = L["rt_controller"].Controller(lcfg, q, "closed", llc, pl)
         ring = L["rsi_ring"].RsiRing()

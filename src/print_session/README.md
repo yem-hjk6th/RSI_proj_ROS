@@ -189,3 +189,26 @@ Number formats are those of the legacy writers (`rsi_proc.py`, `run_cl._f`, `Bor
 The tests run on a ROS domain of their own (1–19, set in `test/conftest.py`; `PRINT_SESSION_ROS_DOMAIN_ID` overrides
 it): the bringup tests publish `/krc/state` through the bridge, which other packages' node tests running in parallel
 react to.
+
+## Cage 2 (T15)
+
+`print_session.cage2: true` (example `config/cage2_bduo.yaml`, the flags of session bduo_20261103_195120) also starts:
+
+- `width_readout_elp_b` (kind B, section `width_readout_elp_b`) on `/elp_b/image_raw` -> `/width/elp_b`, whenever the
+  pattern has +X lines (with `elp_b off` it is logged only, as legacy);
+- `width_readout_bore2` (camera bore2, section `width_readout_bore2`) when `cl_controller.bore2` is not off. With
+  `fallback` / `primary` the session ends if that node ends (as for bore1 with plan A_b1).
+
+Rigs are bound to the role: ELP-A uses the section's `rig_json` or the packaged cage-2 ELP-A rig, ELP-B the packaged
+ELP-B rig; a rig named for the other role, or the same file for both, is refused. `cl_controller.bore_sd_max` and
+`bore1_offset_mm` / `bore2_offset_mm` are handed to the bore nodes (`sd_max`, `w_offset`); a bore section that sets
+another value is refused. The cage-2 refusals of run_cl.py are listed in `print_session/startup.py`. The camera file must
+publish the images the readouts read: `camera_capture/config/cameras_cage.yaml` keeps `publish_raw: false` for elp_b
+and bore2, which the bringup refuses for a cage-2 session (set it true in the lab copy).
+
+Recorded: `/controller/switch_record` and `/width/elp_b`, `/width/bore2*`; `bag_to_legacy` writes `switch_<ses>.csv`,
+`readoutB_<ses>.csv`, `readoutB_rows_<ses>.csv` and `raw_video/bore2_rt_<ses>.csv`, and the ctrl csv has the cage-2
+columns.
+
+Patterns with `"geometry"` (fan / semicircle) are refused (through the controller's configuration) until their
+controller exists (T16).

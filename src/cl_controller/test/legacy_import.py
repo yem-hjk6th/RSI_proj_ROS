@@ -7,6 +7,9 @@ rt_readout.Pattern, so stand-ins are installed for those two packages when they 
 single-layer ones, so they are kept out of sys.modules and swapped in only inside `with ml() as L:` (the legacy code
 imports some of them inside functions). Every other legacy module (bore1_rt, rsi_proc, ...) is shared, as in the lab
 folder.
+
+`cage2()` does the same for legacy/realtime_cl_cage2_semi_261103 (T15): its rt_readout, rt_law_v3, rsi_ring,
+rt_controller, run_cl and bore1/bore1_rt, swapped in only inside `with cage2() as L:`.
 """
 import importlib.util
 import sys
@@ -82,6 +85,35 @@ def ml():
                 _ML[n] = m
             sys.modules[n] = _ML[n]
         yield dict(_ML)
+    finally:
+        for n, m in saved.items():
+            if m is None:
+                sys.modules.pop(n, None)
+            else:
+                sys.modules[n] = m
+
+
+CAGE2_DIR = LEGACY.parent / "realtime_cl_cage2_semi_261103"
+CAGE2_FILES = {"rt_readout": "rt_readout.py", "rt_law_v3": "rt_law_v3.py", "rsi_ring": "rsi_ring.py",
+               "bore1_rt": "bore1/bore1_rt.py", "rt_controller": "rt_controller.py", "run_cl": "run_cl.py"}
+_C2: dict = {}
+
+
+@contextmanager
+def cage2():
+    """Inside: sys.modules maps the legacy module names to the cage-2 versions. Yields {name: module}."""
+    setup()
+    saved = {n: sys.modules.get(n) for n in CAGE2_FILES}
+    try:
+        for n, f in CAGE2_FILES.items():
+            if n not in _C2:
+                spec = importlib.util.spec_from_file_location(n, CAGE2_DIR / f)
+                m = importlib.util.module_from_spec(spec)
+                sys.modules[n] = m
+                spec.loader.exec_module(m)
+                _C2[n] = m
+            sys.modules[n] = _C2[n]
+        yield dict(_C2)
     finally:
         for n, m in saved.items():
             if m is None:

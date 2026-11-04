@@ -7,7 +7,8 @@ prediction * ys + ym; bf16 autocast on cuda; one CUDA graph for crop-normalise +
 
 Differences from legacy: the sha256 check is ``head.verify_weights`` (against the list committed in this package, and
 it cannot be switched off; ``verified`` takes the paths of a check already done, so that ``make_head`` hashes once); a refusal raises ``WeightError`` instead of ``SystemExit``; ``__call__`` takes the frame
-time (unused) so that it has the head interface of ``head.py``; ``warmup`` is the warm-up of the legacy
+time (unused) so that it has the head interface of ``head.py``; ``camera`` bore2 = the legacy ``Bore2Head`` (crop
+x 544-1120 and a horizontal flip, ``head.crop288``); ``warmup`` is the warm-up of the legacy
 ``bore1_rt.load_head``. Everything else, including the order of the operations, is the legacy code.
 
 Needs torch (a CUDA build; RTX 50 series needs the cu128 wheels) and timm, see the legacy ``requirements_bore1.txt``.
@@ -26,10 +27,11 @@ class TorchHead:
     needs_frame = True
 
     def __init__(self, weight_dir, device="cuda", mem_frac=None, quality=None, use_graph=True, sha_json=None,
-                 verified=None):
+                 verified=None, camera="bore1"):
         import timm
         paths = verified if verified is not None else verify_weights(weight_dir, sha_json)
         self.weight_dir = str(weight_dir)
+        self.camera = camera                    # bore1 | bore2: the crop (head.crop288)
         self.dev = device
         if device == "cuda":
             if mem_frac:
@@ -100,7 +102,7 @@ class TorchHead:
 
     def __call__(self, frame_bgr, t_frame=None) -> Bore1Pred:
         t0 = time.perf_counter()
-        rgb = crop288(frame_bgr)
+        rgb = crop288(frame_bgr, self.camera)
         ok, q = self.quality(rgb)
         y = self.predict_one(rgb)
         return Bore1Pred(float(y.mean()), tuple(float(v) for v in y), float(y.std()), ok, q,
@@ -114,5 +116,5 @@ class TorchHead:
         self.quality.prev = None
 
     def info(self) -> dict:
-        return dict(kind=self.kind, device=self.dev, cuda_graph=self.graph is not None,
+        return dict(kind=self.kind, camera=self.camera, device=self.dev, cuda_graph=self.graph is not None,
                     torch=torch.__version__, gpu=torch.cuda.get_device_name(0) if self.dev == "cuda" else "")

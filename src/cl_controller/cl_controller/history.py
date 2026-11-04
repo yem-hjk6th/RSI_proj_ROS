@@ -74,9 +74,13 @@ class StateHistory:
         t, P = self.td[i0:self.nd], self.Pd[i0:self.nd]
         return np.stack([np.interp(tq, t, P[:, k]) for k in range(3)], -1)
 
-    def veff_at_s(self, y_leg: float, x_start: float, s, n_pk: int = 2400, tol: float = 1.0, pass_only: bool = False):
+    def veff_at_s(self, y_leg: float, x_start: float, s, n_pk: int = 2400, tol: float = 1.0, pass_only: bool = False,
+                  x_sign: int = -1):
         """v_eff at the moment the tip first reached deposition position s (= x_start - x) on the leg at y_leg, from
         the last n_pk packets. None if the leg is not in the window.
+
+        x_sign (cage 2, legacy realtime_cl_cage2_semi_261103/rsi_ring.py 82-97): +1 = a +X line, s = x - x_start
+        (x_start = the line's first x); -1 (default) = a -X leg, the code above.
 
         pass_only (legacy realtime_cl_261023_ml): a -X pass can start right after the same wall's +X pass one layer
         lower (same y), so only the packets after the tip was last at or behind x_start - 0.5 are used. As in the
@@ -90,7 +94,7 @@ class StateHistory:
         m = np.abs(P[:, 1] - y_leg) < tol
         if m.sum() < 2:
             return None
-        sa = np.maximum.accumulate(x_start - P[m, 0])
+        sa = np.maximum.accumulate((x_start - P[m, 0]) if x_sign < 0 else (P[m, 0] - x_start))
         v = ve[m]
         keep = np.r_[True, np.diff(sa) > 0]
         if keep.sum() < 2:

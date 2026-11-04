@@ -2,7 +2,8 @@
 config/e1.yaml rebuilds exactly the configuration session_meta.json says E1 ran with.
 
 run_cl.py is both the single-layer one (legacy/realtime_cl_261023) and the multi-layer one
-(legacy/realtime_cl_261023_ml), which adds --control-sources and --sat-stop-s (T12)."""
+(legacy/realtime_cl_261023_ml), which adds --control-sources and --sat-stop-s (T12), and the cage-2 one
+(legacy/realtime_cl_cage2_semi_261103, T15), which adds the ELP-B / bore2 flags."""
 import dataclasses
 import json
 
@@ -37,11 +38,21 @@ EFFECTIVE_NONE = {
     "control_sources": "", "sat_stop_s": -1.0,
 }
 ML_ONLY = {"control_sources", "sat_stop_s"}
+# cage-2 run_cl.py: the flags of the controller; --elp-b None = "required" there (print_session cage2 requires it)
+CAGE2_ONLY = {"elp_b": "off", "b_from_leg": 1, "bore2": "off", "bore_sd_max": float("inf"), "bore_s_use": 0.0,
+              "bore1_offset_mm": 0.0, "bore2_offset_mm": 0.0}
 
 
-def _legacy_args(ml=False):
+# CtrlCfg fields added by the cage-2 controller (E1 ran without them: their defaults = the E1 behaviour)
+CAGE2_CFG = ("elp_b", "b_from_leg", "dir_win_s", "dir_vmin", "bore2", "bore_s_use")
+
+
+def _legacy_args(ml=False, cage2=False):
     argv = ["--mode", "shadow", "--pattern", "x.json"]
-    if ml:
+    if cage2:
+        with legacy_import.cage2() as L:
+            ns = L["run_cl"].parse_args(argv)
+    elif ml:
         with legacy_import.ml() as L:
             ns = L["run_cl"].parse_args(argv)
     else:
@@ -52,8 +63,10 @@ def _legacy_args(ml=False):
 def test_every_run_cl_argument_is_covered():
     args, _ = _legacy_args()
     args_ml, _ = _legacy_args(ml=True)
+    args_c2, _ = _legacy_args(cage2=True)
     assert set(args_ml) - set(args) == ML_ONLY
-    names = set(args) | set(args_ml) | {"mode", "pattern"}
+    assert set(CAGE2_ONLY) <= set(args_c2) - set(args)
+    names = set(args) | set(args_ml) | set(args_c2) | {"mode", "pattern"}
     missing = names - set(PARAMS) - set(NOT_HERE)
     assert not missing, missing
     assert not (set(PARAMS) & set(NOT_HERE))
@@ -64,11 +77,27 @@ def test_every_run_cl_argument_is_covered():
 def test_defaults_match_run_cl(ml):
     args, _ = _legacy_args(ml)
     for name, (default, _) in PARAMS.items():
-        if name in ("mode", "pattern") or (name in ML_ONLY and not ml):
+        if name in ("mode", "pattern") or (name in ML_ONLY and not ml) or name in CAGE2_ONLY:
             continue
         legacy = args[name]
         want = EFFECTIVE_NONE[name] if legacy is None else legacy
         assert default == want and type(default) is type(want), (name, default, want)
+
+
+def test_cage2_defaults_match_run_cl():
+    args, _ = _legacy_args(cage2=True)
+    for name, want in CAGE2_ONLY.items():
+        default = PARAMS[name][0]
+        assert default == want and type(default) is type(want), name
+        legacy = args[name]
+        if name == "elp_b":
+            assert legacy is None                   # required in run_cl.py (print_session cage2 refuses it missing)
+        elif name == "b_from_leg":
+            assert legacy is None                   # None = the CtrlCfg value
+            with legacy_import.cage2() as L:
+                assert L["rt_controller"].CtrlCfg.b_from_leg == want
+        else:
+            assert legacy == want, (name, legacy)
 
 
 def test_default_params_give_legacy_cfgs():
@@ -98,7 +127,7 @@ def test_e1_yaml_reproduces_session_meta():
     cfg, lc, _ = build_configs(p, load_pattern(E.PATTERN))
     for f in dataclasses.fields(CtrlCfg):
         if f.name not in meta["cfg"]:      # E1 ran the single-layer pipeline: no sat_s / sat_min_dz (sat_s 0 = off)
-            assert getattr(cfg, f.name) == f.default and f.name in ("sat_s", "sat_min_dz"), f.name
+            assert getattr(cfg, f.name) == f.default and f.name in ("sat_s", "sat_min_dz", *CAGE2_CFG), f.name
             continue
         want = meta["cfg"][f.name]
         got = getattr(cfg, f.name)

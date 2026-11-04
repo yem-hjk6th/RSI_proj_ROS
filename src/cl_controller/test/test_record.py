@@ -15,16 +15,25 @@ LEGACY_CTRL_COLS = ["t_perf", "t_wall", "n_upd", "win", "leg", "on_a", "s_tip", 
                     "forced", "plan", "state", "reason", "gate", "valid_elp", "why_elp", "rhat_elp", "lag_elp",
                     "valid_b1", "why_b1", "rhat_b1", "lag_b1", "e", "du", "u", "lnk_ff", "v_tip", "n_corr",
                     "n_switch", "w_target", "lnk_tgt", "nobed_s", "hold_bed", "lnk_ol", "du_blind", "t_blind"]
+CAGE2_EXTRA = ["law", "kind", "dir", "vx", "src_active", "src_why"]       # cage-2 run_cl.py (T15)
+
+
+def _legacy_cols(run_cl, name="CTRL_COLS"):
+    tree = ast.parse(run_cl.read_text(encoding="utf-8"))
+    return [ast.literal_eval(n.value) for n in tree.body
+            if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == name]
 
 
 def test_columns_are_the_legacy_ctrl_cols():
-    assert CTRL_COLS == LEGACY_CTRL_COLS
+    assert CTRL_COLS == LEGACY_CTRL_COLS + CAGE2_EXTRA
     run_cl = E.LEGACY / "run_cl.py"
     if run_cl.exists():                       # the list in legacy run_cl.py itself (read, not imported)
-        tree = ast.parse(run_cl.read_text(encoding="utf-8"))
-        cols = [ast.literal_eval(n.value) for n in tree.body
-                if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "CTRL_COLS"]
-        assert cols == [CTRL_COLS]
+        assert _legacy_cols(run_cl) == [LEGACY_CTRL_COLS]
+    run_cl2 = E.LEGACY.parent / "realtime_cl_cage2_semi_261103" / "run_cl.py"
+    if run_cl2.exists():
+        assert _legacy_cols(run_cl2) == [CTRL_COLS]
+        from cl_controller.record import SWITCH_COLS
+        assert _legacy_cols(run_cl2, "SWITCH_COLS") == [SWITCH_COLS]
 
 
 def _same(a, b):

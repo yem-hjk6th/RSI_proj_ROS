@@ -49,3 +49,11 @@ int8 hold_bed                   # 1 | 0 | -1 = empty
 float64 lnk_ol
 float64 du_blind
 float64 t_blind
+# cage 2 (T15; legacy realtime_cl_cage2_semi_261103 run_cl.py CTRL_COLS). On a law B row the *_elp fields are ELP-B's
+# and the *_b1 fields bore2's.
+string law                      # A | B: the law that holds u
+string kind                     # A | B | - : the line under the tip when a law is active, else -
+string dir                      # -X | +X | 0 (|vx| < dir_vmin) | empty before the print window opens
+float64 vx                      # mm/s, X velocity over dir_win_s
+string src_active               # effective source: elpA | bore1 | model_A | elpB | bore2 | model_B | hold | outside
+string src_why

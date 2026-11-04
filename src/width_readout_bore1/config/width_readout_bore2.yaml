@@ -1,0 +1,28 @@
+# Example parameters for the bore2 readout (cage 2, T15): a second node of this package (name width_readout_bore2),
+# camera bore2 = the +X lines. The weights are not in this repository: weight_dir is a placeholder for the folder with
+# the bore2 cnxt_t_deploy_s0.pt .. s2.pt (checked against config/bore_weights/deploy_bore2_cage2ft_261103/weights/).
+# quality_json is required for bore2 (legacy run_cl.py refused --bore2 without --bore2-quality); the path below is the
+# packaged copy of the limits the session of 2026-11-03 ran with.
+width_readout_bore2:
+  ros__parameters:
+    camera: bore2
+    image_topic: /bore2/image_raw
+    state_topic: /krc/state
+    width_topic: /width/bore2
+    record_topic: /width/bore2/record
+    pattern_json: ""
+    root: ""
+    head: torch
+    weight_dir: <BORE2_WEIGHT_DIR>
+    weights: cage2
+    quality_json: <PKG_SHARE>/config/bore_weights/deploy_bore2_cage2ft_261103/quality_limits_bore2_live_est.json
+    device: cuda
+    mem_frac: 0.0
+    warmup: 5
+    frame_time: receive
+    header_offset_s: 0.0
+    wait_s: 0.06
+    drop_bad_q: true
+    sd_max: 0.05              # run_cl --bore-sd-max (print_session hands it over from cl_controller.bore_sd_max)
+    w_offset: 0.0             # run_cl --bore2-offset-mm (print_session hands it over from cl_controller)
+    session_meta: ""
