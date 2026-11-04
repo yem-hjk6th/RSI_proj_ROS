@@ -1,0 +1,27 @@
+{
+ "_comment": "realtime_cl_cage2_fan_261103 (laptop 11-03): FAN1 diagonal fan, segs from the desktop FAN1_segs_DRAFT_261103.csv (legs renumbered per kind, desktop name in part); v_mm_s = speed at OvCmd ov_ref 40, v100_mm_s at 100; src usr_ELP_FAN1_OL_261103.src (print LIN points checked against the segs)",
+ "geometry": "fan",
+ "src": "usr_ELP_FAN1_OL_261103",
+ "segs": "usr_ELP_FAN1_261103_segs.csv",
+ "z_cmd": {
+  "x0_z0": [
+   600.0,
+   0.8
+  ],
+  "x1_z1": [
+   970.0,
+   2.3
+  ]
+ },
+ "x_start": 945.0,
+ "x_window": [
+  765.0,
+  950.0
+ ],
+ "min_s_tip": 9.0,
+ "ov_ref": 40.0,
+ "v_max_mm_s": 30.0,
+ "line_tol_mm": 1.0,
+ "dir_min_mm": 0.3,
+ "ov_outside_required": 40
+}

@@ -3,6 +3,7 @@
 **What this is**
 - `realtime_cl_261023/` is the Windows/Python closed-loop pipeline as it ran in the lab on 2026-10-22.
 - `realtime_cl_261023_ml/` holds only the five modules and the wall patterns that differ in the multi-layer (walls) variant of the same pipeline; see its `README.md`.
+- `realtime_cl_cage2_semi_261103/` holds the cage-2 modules of 2026-11-03 for the fan program FAN1 and the semicircle program ARC2 (geometry, gates, gate log, failure map), the reference for tasks T13 and T14; see its `README.md`.
 - `pipeline_cage1012/` holds the files of the recorder folder that `run_cl.py` imports:
   - `rsi_listener.py`, which `rsi_proc.py` imports (`build_zero_reply`, `parse_rsi_xml`); the copy from the 2026-10-14 package;
   - `elp.py` (ELP capture and MJPG writer), `borescope.py` (borescope capture and mp4v writer), `config.py` and `pipeline.py`, added 2026-11-02 as the reference for camera capture and recording (task T10). The rest of that folder is not included.
@@ -11,7 +12,7 @@
     - `RSI_OV4.rsi*` and `RSI_EthernetConfig_OV4.xml`: the configuration the print program loads (`RSI_CREATE("RSI_OV4.rsi")`). OvCmd in each reply goes through `LIMIT1` (1..100) to `$OV_PRO`. These are the copies from the 2026-10-20 package. The lab states (2026-11-02) that the controller still runs this last recorded change; the controller's copy was not read back byte for byte.
     - `RSI_MIN.rsi*` and `RSI_EthernetConfig.xml`: an earlier configuration without OvCmd (RKorr only). The lab's print programs no longer load it.
   - `sps.sub`;
-  - KRL programs (`krl/`): one print program, and `usr_OV_step_261020.src`, the air step test program (no extrusion, `RSI_OV4`) that `run_cl.py --mode step --window-ignore-z` ran with the pattern `pattern_usr_ELP_R1v_261016.json` on 2026-10-20. Its header still says `NOT RUN ON HARDWARE YET`; it ran in two lab sessions that day.
+  - KRL programs (`krl/`): `usr_ELP_FAN1_OL_261103.src` and `usr_ELP_ARC2_OL_261103.src`, the FAN1 and ARC2 print programs of 2026-11-03 (one program each for open and closed loop; the PC decides OvCmd; their headers still say `DRAFT, NOT RUN`, and both ran in the lab that day); one print program, and `usr_OV_step_261020.src`, the air step test program (no extrusion, `RSI_OV4`) that `run_cl.py --mode step --window-ignore-z` ran with the pattern `pattern_usr_ELP_R1v_261016.json` on 2026-10-20. Its header still says `NOT RUN ON HARDWARE YET`; it ran in two lab sessions that day.
 
 **Shadow mode does not fit the lab's print programs**
 - In shadow mode the reply carries no `<OvCmd>`. `run_cl.py` (lines 4 and 7) records that shadow mode on `RSI_OV4` means 1 % override. The configuration explains why: with no OvCmd the input is 0, and `LIMIT1` raises it to 1.
