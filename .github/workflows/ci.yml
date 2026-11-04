@@ -58,8 +58,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # OpenCV below 5, like the 4.x of Ubuntu 24.04 in build-test: OpenCV 5 moves two ELP golden readouts
-      # (width_readout_elp test_golden, test_cli) by up to 0.007 mm, beyond their stated tolerance.
+      # OpenCV below 5, like the 4.x of Ubuntu 24.04 in build-test. OpenCV 5's cv2.remap interpolates float maps at the
+      # full position (OpenCV 4: 1/32 px, fixed-point weights), up to 0.007 mm on the E1 widths. The ELP port samples
+      # with readout.remap_linear (the OpenCV 4 result on 4 and 5), so test_golden and test_cli pass on OpenCV 5, but the
+      # tests that run the legacy readouts live (float-map cv2.remap) would compare against OpenCV 5 values there.
       - name: Install dependencies
         run: python -m pip install pytest numpy pandas scipy matplotlib pyyaml "opencv-python-headless<5"
       - name: Test (pytest per package)
