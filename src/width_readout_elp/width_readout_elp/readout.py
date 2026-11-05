@@ -23,8 +23,9 @@ reference uses one half of the band (``MDF_BANDS``; default ``pos``: the A leg p
 the -n half). Kind A (``RtReadout``) is unchanged.
 
 Differences from legacy: no SciPy (the Gaussian filter and the Euler rotation are written in numpy with the same
-definitions), and ``frame_rows`` is split into ``sample_chroma`` and ``rows_from_chroma``. Pure Python, numpy and
-OpenCV; no ROS imports.
+definitions), ``frame_rows`` is split into ``sample_chroma`` and ``rows_from_chroma``, and the bilinear sampling is
+``remap_linear`` (OpenCV 4's fixed-point remap on any OpenCV version; the legacy ``cv2.remap`` on float maps is the
+same on OpenCV 4 and differs on OpenCV 5). Pure Python, numpy and OpenCV; no ROS imports.
 """
 import csv
 import json
@@ -274,6 +275,18 @@ def walk(p, nn, c0, level, direction, maxd=WALK_MAX):
     return np.nan
 
 
+def remap_linear(im: np.ndarray, u, v) -> np.ndarray:
+    """``cv2.remap(im, u, v, INTER_LINEAR)`` with float32 maps as OpenCV 4 computes it, on any OpenCV version.
+
+    OpenCV 4 rounds float maps to 1/32 pixel (``INTER_BITS`` = 5) and interpolates with 15-bit fixed-point weights.
+    OpenCV 5 interpolates at the full float position, which moves the E1 widths by up to 0.007 mm (README, "OpenCV
+    versions"). Converting the maps with ``cv2.convertMaps`` to the fixed-point format first is what OpenCV 4's remap
+    does internally, and remap on fixed-point maps is the same on OpenCV 4 and 5, so the result is bit-identical to
+    the OpenCV 4 float-map remap (and to the legacy readout under OpenCV 4)."""
+    m1, m2 = cv2.convertMaps(np.asarray(u, np.float32), np.asarray(v, np.float32), cv2.CV_16SC2)
+    return cv2.remap(im, m1, m2, cv2.INTER_LINEAR)
+
+
 def sample_chroma(rig, im: np.ndarray, tip, dz: float = 0.0, back: int = +1) -> np.ndarray:
     """Chroma (R-B)/(R+G+B) of a BGR image on the (d, n) bed grid behind the tip; NaN where the rig is not valid.
     ``dz`` lifts the grid above the bed by the leg's planned layer offset (0.0 = single layer, bit-identical).
@@ -287,8 +300,7 @@ def sample_chroma_grid(rig, im: np.ndarray, tip, gx, gy, dz: float = 0.0) -> np.
     fan / semicircle readout (``path_readout``) passes the grid that follows the path."""
     uv, z = rig.project(np.stack([gx, gy, rig.bed_z(gx, gy) + dz], -1), rig.Tcw_at(tip))
     ok = rig.valid(uv, z)
-    m = cv2.remap(im, uv[..., 0].astype(np.float32), uv[..., 1].astype(np.float32),
-                  cv2.INTER_LINEAR).astype(np.float32)
+    m = remap_linear(im, uv[..., 0], uv[..., 1]).astype(np.float32)
     c = (m[..., 2] - m[..., 0]) / np.maximum(m.sum(-1), 1)
     c[~ok] = np.nan
     return c

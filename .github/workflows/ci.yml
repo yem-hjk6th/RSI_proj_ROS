@@ -58,8 +58,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # OpenCV below 5, like the 4.x of Ubuntu 24.04 in build-test: OpenCV 5 moves two ELP golden readouts
-      # (width_readout_elp test_golden, test_cli) by up to 0.007 mm, beyond their stated tolerance.
+      # OpenCV below 5, like the 4.x of Ubuntu 24.04 in build-test. OpenCV 5's cv2.remap interpolates float maps at the
+      # full position (OpenCV 4: 1/32 px, fixed-point weights), up to 0.007 mm on the E1 widths. The ELP port samples
+      # with readout.remap_linear (the OpenCV 4 result on 4 and 5), so test_golden and test_cli pass on OpenCV 5, but the
+      # tests that run the legacy readouts live (float-map cv2.remap) would compare against OpenCV 5 values there.
       - name: Install dependencies
         run: python -m pip install pytest numpy pandas scipy matplotlib pyyaml "opencv-python-headless<5"
       - name: Test (pytest per package)
@@ -79,3 +81,43 @@ jobs:
             Pop-Location
           }
           if ($failed.Count -gt 0) { Write-Host "failed: $($failed -join ', ')"; exit 1 }
+
+  # width_readout_elp on OpenCV 5 (Linux, Python 3.12, no ROS). On OpenCV 4, which every other job runs, remap_linear
+  # and the float-map cv2.remap give the same result, so test_remap.py cannot catch a revert of remap_linear there. On
+  # OpenCV 5 the float-map remap interpolates at the full position, and test_remap.py, test_golden.py and test_cli.py
+  # fail if remap_linear is reverted. The wheel is pinned to an exact 5.x version. pandas, scipy and pyyaml are needed
+  # to collect the package's tests; path_geometry is on PYTHONPATH for the fan / semicircle readout.
+  # Deselected: the nine tests that run the legacy modules live. The legacy readouts call cv2.remap on float maps, so
+  # on OpenCV 5 they no longer give what the legacy gave when it ran (OpenCV 4.x); the README, "OpenCV versions":
+  #   test_legacy_live.py::test_port_matches_legacy_live
+  #   test_walls.py::test_plane_lift_matches_legacy_ml
+  #   test_path_readout.py::test_read_equals_legacy_on_synthetic_images[A-fan1|A-arc2|B-fan1|B-arc2]
+  #   test_elp_b.py::test_read_equals_legacy_on_synthetic_images[pos|both|neg]
+  elp-opencv5:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: python -m pip install pytest numpy pandas scipy pyyaml "opencv-python-headless==5.0.0.93"
+      - name: Test width_readout_elp on OpenCV 5
+        working-directory: src/width_readout_elp
+        env:
+          PYTHONPATH: ../path_geometry
+        run: |
+          python -c "import cv2, sys; print(cv2.__version__); sys.exit(cv2.__version__.split('.')[0] != '5')"
+          python -m pytest -q -rs -p no:cacheprovider test \
+            --deselect "test/test_legacy_live.py::test_port_matches_legacy_live" \
+            --deselect "test/test_walls.py::test_plane_lift_matches_legacy_ml" \
+            --deselect "test/test_path_readout.py::test_read_equals_legacy_on_synthetic_images[A-fan1]" \
+            --deselect "test/test_path_readout.py::test_read_equals_legacy_on_synthetic_images[A-arc2]" \
+            --deselect "test/test_path_readout.py::test_read_equals_legacy_on_synthetic_images[B-fan1]" \
+            --deselect "test/test_path_readout.py::test_read_equals_legacy_on_synthetic_images[B-arc2]" \
+            --deselect "test/test_elp_b.py::test_read_equals_legacy_on_synthetic_images[pos]" \
+            --deselect "test/test_elp_b.py::test_read_equals_legacy_on_synthetic_images[both]" \
+            --deselect "test/test_elp_b.py::test_read_equals_legacy_on_synthetic_images[neg]"
