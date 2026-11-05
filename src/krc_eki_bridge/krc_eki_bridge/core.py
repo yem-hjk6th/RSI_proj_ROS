@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import math
+import numbers
 import queue
 import select
 import socket
@@ -65,6 +66,17 @@ class CoreStatus:
     errors: List[str] = field(default_factory=list)
 
 
+def _require_finite(name: str, value: object, minimum: float, inclusive: bool) -> None:
+    """Raise ValueError naming ``name`` unless ``value`` is a real number (bool included), finite and above
+    ``minimum`` (or equal to it when ``inclusive``)."""
+    if not isinstance(value, numbers.Real):
+        raise ValueError(f"{name} {value!r}: need a number, not {type(value).__name__}")
+    v = float(value)
+    ok = math.isfinite(v) and (v >= minimum if inclusive else v > minimum)
+    if not ok:
+        raise ValueError(f"{name} {value!r}: need a finite value {'>=' if inclusive else '>'} {minimum:g}")
+
+
 class EkiBridgeCore:
     def __init__(
         self,
@@ -82,8 +94,13 @@ class EkiBridgeCore:
     ) -> None:
         # NaN never satisfies now >= next_send (no override is ever sent, so no watchdog ramp reaches the
         # controller) and inf stops sending after the first value: both would void invariant 3.
-        if not (math.isfinite(float(send_period_s)) and send_period_s > 0):
-            raise ValueError(f"send_period_s {send_period_s!r}: need a finite value > 0")
+        # NaN / inf in the socket timeouts or the reconnect wait raise ValueError / OverflowError in the I/O thread,
+        # which catches only OSError, so the thread would die; NaN / inf in chord_s / tau_v break the speed estimate.
+        # All of them are refused here, before the thread starts.
+        for name, value in (("send_period_s", send_period_s), ("connect_timeout_s", connect_timeout_s),
+                            ("send_timeout_s", send_timeout_s), ("chord_s", chord_s), ("tau_v", tau_v)):
+            _require_finite(name, value, minimum=0.0, inclusive=False)
+        _require_finite("reconnect_s", reconnect_s, minimum=0.0, inclusive=True)
         self.host, self.port = host, int(port)
         self.cfg = cfg
         self.send_period_s = float(send_period_s)
@@ -92,7 +109,7 @@ class EkiBridgeCore:
         self.send_timeout_s = float(send_timeout_s)
         self.clock = clock
         self.supervisor = OverrideSupervisor(cfg)
-        self._chord_s, self._tau_v = chord_s, tau_v
+        self._chord_s, self._tau_v = float(chord_s), float(tau_v)
         self._cmd_q: "queue.SimpleQueue[Tuple[float, int, float, str]]" = queue.SimpleQueue()
         self._state_q: "queue.Queue[StateSample]" = queue.Queue(maxsize=state_queue_size)
         self._stop = threading.Event()

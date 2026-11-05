@@ -21,6 +21,7 @@ All times are seconds on one monotonic clock chosen by the caller.
 from __future__ import annotations
 
 import math
+import numbers
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -38,6 +39,12 @@ class OverrideConfig:
         # NaN or inf in any field would break invariant 2 (int() of the window raises, or ov_default turns every
         # clamp into an exception in the send loop) or invariant 3 (wd_s = inf never goes stale, fallback_ramp_s =
         # inf never leaves the last control value). Refuse them here, as krc_rsi_bridge.decider.effective_limits does.
+        # A non-numeric value (e.g. the string "50") would pass a float() conversion here and raise TypeError later in
+        # the I/O thread, so every field must be a real number (bool counts, as in the RSI decider).
+        for name in ("ov_min", "ov_max", "ov_floor", "ov_default", "wd_s", "fallback_ramp_s"):
+            value = getattr(self, name)
+            if not isinstance(value, numbers.Real):
+                raise ValueError(f"{name} {value!r}: need a number, not {type(value).__name__}")
         for name in ("ov_min", "ov_max", "ov_floor", "ov_default"):
             if not _is_finite_number(getattr(self, name)):
                 raise ValueError(f"{name} {getattr(self, name)!r}: need a finite number")
@@ -60,9 +67,11 @@ class OverrideConfig:
 
 
 def _is_finite_number(x: object) -> bool:
-    """True if ``x`` converts to a finite float; False for NaN, +-inf and anything ``float()`` refuses."""
+    """True if ``x`` is a real number (bool included) with a finite value; False for NaN, +-inf and non-numbers."""
+    if not isinstance(x, numbers.Real):
+        return False
     try:
-        return math.isfinite(float(x))  # type: ignore[arg-type]
+        return math.isfinite(float(x))
     except (TypeError, ValueError, OverflowError):
         return False
 
