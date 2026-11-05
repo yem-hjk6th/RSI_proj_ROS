@@ -6,9 +6,12 @@ Run from the repository root (needs numpy, scipy, pandas, OpenCV):
 Writes test/fixtures/golden_legacy_e1.csv: one line per (frame, d bin) the legacy readout returned, with every row
 column at full precision, plus one line per frame the legacy gate rejected (empty row columns, the skip reason).
 
-The fixture depends on the JPEG decoder. A different OpenCV / libjpeg build decodes the q95 frames to slightly
-different pixels: the rows, gates and NaN pattern stay the same, but widths move by up to about 0.007 mm, far more
-than the 1e-6 mm tolerance. Regenerate it only in the CI environment. The committed fixture was made with:
+The fixture is the legacy readout, which samples with ``cv2.remap`` on float maps. OpenCV 5 interpolates those at the
+full float position (OpenCV 4: 1/32 pixel, fixed-point weights), which moves the widths by up to 0.007 mm, far more
+than the 1e-6 mm tolerance; the port's ``remap_linear`` keeps the OpenCV 4 result on OpenCV 5 (README, "OpenCV
+versions"). The JPEG decode of the E1 frames is the same with the opencv-python-headless 4.10.0.84 and 5.0.0.93
+wheels; another libjpeg build may still decode the q95 frames to other pixels. So regenerate the fixture only in the
+CI environment, with OpenCV 4. The committed fixture was made with:
     image    ros:jazzy-ros-base@sha256:8eed0a4669bbf43ee331878a4c39bd8ebddea8e3312a58b4fae8edb14526b617
     packages (installed by rosdep from package.xml) python3-opencv 4.6.0+dfsg-13.1ubuntu1 (cv2.__version__ 4.6.0),
              libjpeg-turbo8 2.1.5-2ubuntu2, numpy 1.26.4, scipy 1.11.4, pandas 2.1.4
