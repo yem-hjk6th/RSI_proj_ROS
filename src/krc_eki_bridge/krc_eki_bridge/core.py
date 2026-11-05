@@ -16,6 +16,7 @@ its own safe override (``krc_templates/sps_eki_override.sub``). A thread is ther
 from __future__ import annotations
 
 import logging
+import math
 import queue
 import select
 import socket
@@ -79,8 +80,10 @@ class EkiBridgeCore:
         state_queue_size: int = 1000,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if send_period_s <= 0:
-            raise ValueError("send_period_s must be > 0")
+        # NaN never satisfies now >= next_send (no override is ever sent, so no watchdog ramp reaches the
+        # controller) and inf stops sending after the first value: both would void invariant 3.
+        if not (math.isfinite(float(send_period_s)) and send_period_s > 0):
+            raise ValueError(f"send_period_s {send_period_s!r}: need a finite value > 0")
         self.host, self.port = host, int(port)
         self.cfg = cfg
         self.send_period_s = float(send_period_s)

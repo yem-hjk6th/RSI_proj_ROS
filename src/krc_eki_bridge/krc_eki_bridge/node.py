@@ -35,22 +35,28 @@ class EkiBridgeNode(Node):
         p = self.declare_parameter
         host = p("controller_host", "<CONTROLLER_IP>").value
         port = p("controller_port", 54600).value
-        cfg = OverrideConfig(
-            ov_min=p("ov_min", 1).value,
-            ov_max=p("ov_max", 100).value,
-            ov_floor=p("ov_floor", 0).value,
-            ov_default=p("ov_default", 50).value,
-            wd_s=p("wd_s", 1.0).value,
-            fallback_ramp_s=p("fallback_ramp_s", 2.0).value,
-        )
-        self.core = EkiBridgeCore(
-            host, port, cfg,
-            send_period_s=p("send_period_s", 0.05).value,
-            connect_timeout_s=p("connect_timeout_s", 1.0).value,
-            reconnect_s=p("reconnect_s", 1.0).value,
-            chord_s=p("chord_s", 0.1).value,
-            tau_v=p("tau_v", 0.28).value,
-        )
+        # A refused configuration (e.g. wd_s or fallback_ramp_s NaN / inf, issue #47) stops the node here: the
+        # ValueError is logged and re-raised, never replaced by defaults.
+        try:
+            cfg = OverrideConfig(
+                ov_min=p("ov_min", 1).value,
+                ov_max=p("ov_max", 100).value,
+                ov_floor=p("ov_floor", 0).value,
+                ov_default=p("ov_default", 50).value,
+                wd_s=p("wd_s", 1.0).value,
+                fallback_ramp_s=p("fallback_ramp_s", 2.0).value,
+            )
+            self.core = EkiBridgeCore(
+                host, port, cfg,
+                send_period_s=p("send_period_s", 0.05).value,
+                connect_timeout_s=p("connect_timeout_s", 1.0).value,
+                reconnect_s=p("reconnect_s", 1.0).value,
+                chord_s=p("chord_s", 0.1).value,
+                tau_v=p("tau_v", 0.28).value,
+            )
+        except ValueError as e:
+            self.get_logger().fatal(f"refused configuration, not starting: {e}")
+            raise
         self._forced_logged = False
         self.pub = self.create_publisher(KrcState, "/krc/state", 50)
         self.sub = self.create_subscription(OverrideCmd, "/krc/override_cmd", self._on_cmd, 10)
@@ -95,7 +101,13 @@ class EkiBridgeNode(Node):
 
 def main(args=None) -> None:
     rclpy.init(args=args)
-    node = EkiBridgeNode()
+    try:
+        node = EkiBridgeNode()
+    except Exception:
+        # refused configuration: shut down and let the error end the process (non-zero exit)
+        if rclpy.ok():
+            rclpy.shutdown()
+        raise
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
