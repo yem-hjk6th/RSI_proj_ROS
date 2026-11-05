@@ -5,12 +5,11 @@
 - invariant 2: the supervisor's output and every command frame it sends stay in [max(ov_min, ov_floor), ov_max] for
   random command sequences, including NaN, inf and values far outside the window;
 - invariant 3: a configuration that would switch off the watchdog or the ramp (wd_s or fallback_ramp_s infinite) is
-  not refused today. Those two tests are xfail(strict=True); see issue #47.
+  refused at construction (issue #47), and the node lets that refusal stop it instead of starting with defaults.
 """
 import ast
 import math
 import random
-import re
 from pathlib import Path
 
 import pytest
@@ -21,7 +20,6 @@ from krc_eki_bridge.safety import OverrideConfig, OverrideSupervisor, clamp_over
 PKG = Path(__file__).resolve().parents[1]
 SRC = PKG.parent
 CONTROLLER_SIDE = (".src", ".sub", ".dat", ".krl", ".rsi", ".rsix", ".diagram")
-INV3_ISSUE = "issue #47"
 
 
 def _controller_side_files():
@@ -114,23 +112,50 @@ def _refused_or_ramps_to_default(**kw) -> None:
     assert sup.output(3600.0)[0] == 40
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="invariant 3 violated: OverrideConfig accepts wd_s = inf; the heartbeat never goes stale and "
-                          "the output 3600 s after the last command is still (90, 'control') (" + INV3_ISSUE + ")")
 def test_infinite_watchdog_timeout_is_refused_or_ramps():
     _refused_or_ramps_to_default(wd_s=math.inf, fallback_ramp_s=2.0)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="invariant 3 violated: OverrideConfig accepts fallback_ramp_s = inf; the watchdog fires but "
-                          "the output 3600 s after the last command is still (90, 'watchdog') (" + INV3_ISSUE + ")")
 def test_infinite_ramp_is_refused_or_ramps():
     _refused_or_ramps_to_default(wd_s=1.0, fallback_ramp_s=math.inf)
 
 
-def test_node_passes_the_parameters_unchecked_to_the_config():
-    """The node builds OverrideConfig straight from its float parameters, so the two cases above are reachable from
-    a parameter file (YAML .inf)."""
-    src = (PKG / "krc_eki_bridge" / "node.py").read_text(encoding="utf-8")
-    assert re.search(r'wd_s=p\("wd_s", 1\.0\)\.value', src)
-    assert re.search(r'fallback_ramp_s=p\("fallback_ramp_s", 2\.0\)\.value', src)
+def _call_name(node) -> str:
+    return getattr(node.func, "id", getattr(node.func, "attr", "")) if isinstance(node, ast.Call) else ""
+
+
+def _param_kwargs(call: ast.Call) -> dict:
+    """{keyword: parameter name} for every keyword of ``call`` given as ``p("<name>", default).value``."""
+    out = {}
+    for kw in call.keywords:
+        v = kw.value
+        if (isinstance(v, ast.Attribute) and v.attr == "value" and _call_name(v.value) == "p"
+                and isinstance(v.value.args[0], ast.Constant)):
+            out[kw.arg] = v.value.args[0].value
+    return out
+
+
+def test_node_passes_the_parameters_to_the_checked_config_and_stops_on_refusal():
+    """The node builds OverrideConfig and EkiBridgeCore straight from its parameters, so the refusals above see the
+    values of a parameter file (YAML .inf) unchanged, nothing in between replaces them with defaults; and it builds them
+    inside a ``try`` whose ``except ValueError`` logs and re-raises, so a refused configuration stops the node before
+    the I/O thread starts (test_nonfinite_config.py::test_node_exits_on_infinite_wd_s runs it under ROS)."""
+    tree = ast.parse((PKG / "krc_eki_bridge" / "node.py").read_text(encoding="utf-8"))
+    init = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "__init__")
+    tries = [n for n in ast.walk(init) if isinstance(n, ast.Try)
+             and any(_call_name(c) == "OverrideConfig" for c in ast.walk(n))]
+    assert len(tries) == 1
+    guarded = tries[0]
+    calls = {_call_name(c): c for c in ast.walk(guarded) if isinstance(c, ast.Call)}
+    assert _param_kwargs(calls["OverrideConfig"]) == {
+        k: k for k in ("ov_min", "ov_max", "ov_floor", "ov_default", "wd_s", "fallback_ramp_s")}
+    assert _param_kwargs(calls["EkiBridgeCore"]) == {
+        k: k for k in ("send_period_s", "connect_timeout_s", "reconnect_s", "chord_s", "tau_v")}
+    handlers = [h for h in guarded.handlers if getattr(h.type, "id", "") == "ValueError"]
+    assert len(handlers) == 1
+    last = handlers[0].body[-1]
+    assert isinstance(last, ast.Raise) and last.exc is None     # re-raised as is, no fallback configuration
+    assert not guarded.orelse and not guarded.finalbody
+    # the I/O thread starts only after the guarded construction, never inside it
+    starts = [n for n in ast.walk(init) if isinstance(n, ast.Call) and _call_name(n) == "start"]
+    assert starts and all(s.lineno > guarded.end_lineno for s in starts)

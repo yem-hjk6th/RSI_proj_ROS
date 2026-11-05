@@ -21,6 +21,7 @@ All times are seconds on one monotonic clock chosen by the caller.
 from __future__ import annotations
 
 import math
+import numbers
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -35,14 +36,26 @@ class OverrideConfig:
     fallback_ramp_s: float = 2.0  # ramp duration to ov_default [s]; 0 = jump
 
     def __post_init__(self) -> None:
+        # NaN or inf in any field would break invariant 2 (int() of the window raises, or ov_default turns every
+        # clamp into an exception in the send loop) or invariant 3 (wd_s = inf never goes stale, fallback_ramp_s =
+        # inf never leaves the last control value). Refuse them here, as krc_rsi_bridge.decider.effective_limits does.
+        # A non-numeric value (e.g. the string "50") would pass a float() conversion here and raise TypeError later in
+        # the I/O thread, so every field must be a real number (bool counts, as in the RSI decider).
+        for name in ("ov_min", "ov_max", "ov_floor", "ov_default", "wd_s", "fallback_ramp_s"):
+            value = getattr(self, name)
+            if not isinstance(value, numbers.Real):
+                raise ValueError(f"{name} {value!r}: need a number, not {type(value).__name__}")
+        for name in ("ov_min", "ov_max", "ov_floor", "ov_default"):
+            if not _is_finite_number(getattr(self, name)):
+                raise ValueError(f"{name} {getattr(self, name)!r}: need a finite number")
         if not 0 <= int(self.ov_min) <= int(self.ov_max) <= 100:
             raise ValueError("need 0 <= ov_min <= ov_max <= 100")
         if int(self.ov_floor) > int(self.ov_max):
             raise ValueError("ov_floor must not exceed ov_max")
-        if not self.wd_s > 0:
-            raise ValueError("wd_s must be > 0")
-        if self.fallback_ramp_s < 0 or math.isnan(self.fallback_ramp_s):
-            raise ValueError("fallback_ramp_s must be >= 0")
+        if not (_is_finite_number(self.wd_s) and self.wd_s > 0):
+            raise ValueError(f"wd_s {self.wd_s!r}: need a finite value > 0")
+        if not (_is_finite_number(self.fallback_ramp_s) and self.fallback_ramp_s >= 0):
+            raise ValueError(f"fallback_ramp_s {self.fallback_ramp_s!r}: need a finite value >= 0")
 
     @property
     def lo(self) -> int:
@@ -51,6 +64,16 @@ class OverrideConfig:
     @property
     def hi(self) -> int:
         return int(self.ov_max)
+
+
+def _is_finite_number(x: object) -> bool:
+    """True if ``x`` is a real number (bool included) with a finite value; False for NaN, +-inf and non-numbers."""
+    if not isinstance(x, numbers.Real):
+        return False
+    try:
+        return math.isfinite(float(x))
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 
 def clamp_override(value: float, cfg: OverrideConfig) -> int:

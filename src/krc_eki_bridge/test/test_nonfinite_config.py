@@ -1,0 +1,158 @@
+"""Issue #47: NaN / inf in the override configuration is refused (safety invariants 2 and 3).
+
+Before the fix ``OverrideConfig`` accepted ``wd_s = inf`` and ``fallback_ramp_s = inf``: the heartbeat never went
+stale, or the watchdog ramp never left the last control value. The "before" behaviour is reproduced here by building
+the config without ``__post_init__``, which is what the unfixed check let through.
+
+Review follow-up: the core also refuses NaN / inf (and non-numbers) in its other timing parameters, which would
+otherwise kill the I/O thread, and every OverrideConfig field must be a real number (bool included, as in the RSI
+decider).
+"""
+import dataclasses
+import os
+import socket
+import subprocess
+import sys
+
+import pytest
+
+from krc_eki_bridge.core import EkiBridgeCore
+from krc_eki_bridge.safety import OverrideConfig, OverrideSupervisor
+
+INF = float("inf")
+NAN = float("nan")
+
+
+def _unchecked(**kw) -> OverrideConfig:
+    """An OverrideConfig built without validation: the configuration the unfixed check accepted."""
+    cfg = object.__new__(OverrideConfig)
+    for f in dataclasses.fields(OverrideConfig):
+        object.__setattr__(cfg, f.name, kw.get(f.name, f.default))
+    return cfg
+
+
+def _issue_47_run(cfg: OverrideConfig):
+    """Issue #47 input: one command 90 with seq 1 at t = 0, output at t = 3600 s."""
+    sup = OverrideSupervisor(cfg)
+    sup.on_command(90, 1, 0.0)
+    assert sup.output(0.0) == (90, "control")
+    return sup.output(3600.0)
+
+
+# ---- item 1: every non-finite field is refused, with the parameter named in the message
+
+@pytest.mark.parametrize("name, value", [
+    ("wd_s", INF), ("wd_s", -INF), ("wd_s", NAN),
+    ("fallback_ramp_s", INF), ("fallback_ramp_s", NAN),
+    ("ov_min", INF), ("ov_min", NAN),
+    ("ov_max", INF), ("ov_max", NAN),
+    ("ov_floor", INF), ("ov_floor", -INF), ("ov_floor", NAN),
+    ("ov_default", INF), ("ov_default", -INF), ("ov_default", NAN),
+])
+def test_nonfinite_field_is_refused(name, value):
+    with pytest.raises(ValueError, match=name):
+        OverrideConfig(**{name: value})
+
+
+def test_nonfinite_ov_default_would_break_the_clamp_without_the_check():
+    # why ov_default is checked: clamp_override maps NaN / inf commands to ov_default, which then cannot be rounded,
+    # so every output() of the send loop would raise instead of sending a clamped value (invariant 2)
+    sup = OverrideSupervisor(_unchecked(ov_default=NAN))
+    with pytest.raises(ValueError):
+        sup.output(0.0)
+
+
+@pytest.mark.parametrize("value", [INF, NAN])
+def test_nonfinite_send_period_is_refused(value):
+    # the core's send period decides whether the ramp reaches the controller at all (invariant 3)
+    with pytest.raises(ValueError, match="send_period_s"):
+        EkiBridgeCore("127.0.0.1", 1, OverrideConfig(), send_period_s=value)
+
+
+# ---- item 3: the core's other timing parameters, and non-numeric override fields
+
+@pytest.mark.parametrize("value", [INF, -INF, NAN, "1.0", None])
+@pytest.mark.parametrize("name", ["connect_timeout_s", "reconnect_s", "send_timeout_s", "chord_s", "tau_v"])
+def test_nonfinite_or_non_numeric_core_timing_is_refused(name, value):
+    # NaN / inf here raise ValueError / OverflowError inside the I/O thread, which catches only OSError
+    with pytest.raises(ValueError, match=name):
+        EkiBridgeCore("127.0.0.1", 1, OverrideConfig(), **{name: value})
+
+
+def test_nonfinite_socket_timeout_is_no_oserror():
+    # why the core refuses them at construction: the I/O thread's ``except OSError`` would not catch this
+    with pytest.raises((ValueError, OverflowError)) as exc:
+        socket.create_connection(("127.0.0.1", 1), timeout=NAN)
+    assert not isinstance(exc.value, OSError)
+
+
+def test_finite_core_timing_and_bool_are_accepted():
+    core = EkiBridgeCore("127.0.0.1", 1, OverrideConfig(), connect_timeout_s=0.5, reconnect_s=0.0,
+                         send_timeout_s=0.2, chord_s=True, tau_v=0.28)
+    assert (core.connect_timeout_s, core.reconnect_s, core._chord_s) == (0.5, 0.0, 1.0)
+
+
+@pytest.mark.parametrize("value", ["50", "inf", None, [50], b"50"])
+@pytest.mark.parametrize("name", ["ov_min", "ov_max", "ov_floor", "ov_default", "wd_s", "fallback_ramp_s"])
+def test_non_numeric_override_field_is_refused(name, value):
+    with pytest.raises(ValueError, match=name):
+        OverrideConfig(**{name: value})
+
+
+def test_non_numeric_ov_default_would_raise_in_the_send_loop_without_the_check():
+    # the input of the review finding: ov_default = "50" used to pass; the watchdog ramp (ov_default - ov_from) then
+    # raised TypeError in the I/O thread instead of ramping to ov_default (invariant 3)
+    sup = OverrideSupervisor(_unchecked(ov_default="50"))
+    sup.on_command(90, 1, 0.0)
+    assert sup.output(0.0) == (90, "control")
+    with pytest.raises(TypeError):
+        sup.output(1.5)
+
+
+def test_bool_fields_stay_accepted_as_in_the_rsi_decider():
+    cfg = OverrideConfig(ov_min=True, ov_max=100, ov_floor=False, ov_default=50, wd_s=True, fallback_ramp_s=False)
+    assert (cfg.lo, cfg.hi, cfg.wd_s, cfg.fallback_ramp_s) == (1, 100, True, False)
+
+
+# ---- the two configurations of issue #47, before and after
+
+def test_issue_47_infinite_wd_s_before_and_after():
+    assert _issue_47_run(_unchecked(ov_default=40, wd_s=INF, fallback_ramp_s=2.0)) == (90, "control")  # before
+    with pytest.raises(ValueError, match="wd_s"):                                                       # after
+        OverrideConfig(ov_default=40, wd_s=INF, fallback_ramp_s=2.0)
+
+
+def test_issue_47_infinite_ramp_before_and_after():
+    assert _issue_47_run(_unchecked(ov_default=40, wd_s=1.0, fallback_ramp_s=INF)) == (90, "watchdog")  # before
+    with pytest.raises(ValueError, match="fallback_ramp_s"):                                            # after
+        OverrideConfig(ov_default=40, wd_s=1.0, fallback_ramp_s=INF)
+
+
+def test_finite_config_still_ramps_linearly_to_default():
+    cfg = OverrideConfig(ov_default=40, wd_s=1.0, fallback_ramp_s=2.0)
+    assert _issue_47_run(cfg) == (40, "watchdog")
+    sup = OverrideSupervisor(cfg)
+    sup.on_command(90, 1, 0.0)
+    assert sup.output(1.0) == (90, "control")        # exactly wd_s old: still fresh
+    # stale from t = 1.0: 90 -> 40 over 2 s, i.e. -25 %/s
+    for t, exp in [(1.4, 80), (1.8, 70), (2.0, 65), (2.6, 50), (3.0, 40), (10.0, 40)]:
+        assert sup.output(t) == (exp, "watchdog")
+
+
+# ---- item 2: the node refuses to start, no fallback to defaults
+
+def test_node_exits_on_infinite_wd_s(tmp_path):
+    pytest.importorskip("rclpy")
+    pytest.importorskip("krc_interfaces.msg")
+    params = tmp_path / "params.yaml"
+    params.write_text("krc_eki_bridge:\n  ros__parameters:\n    wd_s: .inf\n")
+    pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    env = dict(os.environ)
+    env["PYTHONPATH"] = pkg_root + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(
+        [sys.executable, "-m", "krc_eki_bridge.node", "--ros-args", "--params-file", str(params)],
+        env=env, capture_output=True, text=True, timeout=60)
+    out = proc.stdout + proc.stderr
+    assert proc.returncode != 0, out
+    assert "wd_s inf: need a finite value > 0" in out, out
+    assert "EKI bridge ->" not in out, out   # never reached the start-up message
